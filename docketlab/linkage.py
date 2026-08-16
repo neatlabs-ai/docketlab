@@ -157,7 +157,7 @@ def run(docket_id: str, adjudicate: bool = True, progress=None) -> dict:
         try:
             client = analyze._client()
         except RuntimeError as e:
-            say(f"retrieval only — {e}")
+            say(f"retrieval only - {e}")
 
     rows, adjudicated = [], 0
     use_z = len(responses) >= 4

@@ -31,7 +31,7 @@ EMAIL = "info@neatlabs.ai"
 REPO = "https://github.com/neatlabs-ai/docketlab"
 GITHUB_ORG = "https://github.com/neatlabs-ai"
 
-VERSION = "0.7.1"
+VERSION = "0.7.2"
 LICENSE = "Apache-2.0"
 
 # Required by the regulations.gov API terms of use. Kept verbatim.

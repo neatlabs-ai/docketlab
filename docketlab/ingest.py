@@ -265,7 +265,7 @@ def pull_docket(docket_id: str, progress: Callable[[str], None] | None = None,
             if limit and new >= limit:
                 break
     except QuotaExhausted as e:
-        say(f"quota exhausted (resets {e}); {new} pulled, progress saved — rerun later")
+        say(f"quota exhausted (resets {e}); {new} pulled, progress saved - rerun later")
 
     total = store.scalar(
         "SELECT count(*) FROM comments WHERE docket_id = ?", [docket_id]

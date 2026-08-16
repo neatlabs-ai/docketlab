@@ -12,5 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""DOCKETLAB — local-first federal rulemaking comment analysis."""
-__version__ = "0.7.1"
+"""DOCKETLAB - local-first federal rulemaking comment analysis.
+
+Console output is forced to UTF-8 on import. The Windows console defaults to
+cp1252, which cannot encode an arrow or an em dash, so a single decorative
+character in a progress line kills the whole run with a UnicodeEncodeError —
+and only on Windows, and only when output goes to a terminal rather than a
+browser. `errors="replace"` means an unmappable character degrades to a
+placeholder instead of aborting an hour-long ingest.
+"""
+import sys as _sys
+
+for _stream in ("stdout", "stderr"):
+    _s = getattr(_sys, _stream, None)
+    if _s is not None and hasattr(_s, "reconfigure"):
+        try:
+            _s.reconfigure(encoding="utf-8", errors="replace")
+        except (ValueError, OSError):
+            pass
+__version__ = "0.7.2"

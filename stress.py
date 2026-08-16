@@ -262,6 +262,17 @@ check("export with no docket is a 400", " 400 " in _got, _got)
 check("export after pipeline succeeds", _got.endswith("200 200"), _got)
 _sh2.rmtree(_nr, ignore_errors=True)
 
+print("\n=== legacy console encoding (the Windows cp1252 default) ===")
+_enc = _tf2.mkdtemp(prefix="dl_enc_")
+_eo = _sp2.run([sys.executable, "-m", "docketlab", "fixture"],
+               capture_output=True, text=True, errors="replace",
+               cwd=os.path.dirname(os.path.abspath(__file__)),
+               env={**os.environ, "DL_HOME": _enc, "PYTHONIOENCODING": "cp1252"})
+check("CLI survives a cp1252 console", _eo.returncode == 0,
+      (_eo.stderr.strip().splitlines() or ["?"])[-1][:120])
+check("no UnicodeEncodeError", "UnicodeEncodeError" not in (_eo.stdout + _eo.stderr))
+_sh2.rmtree(_enc, ignore_errors=True)
+
 print("\n=== cold start: every page on a fresh install with no data ===")
 import shutil, tempfile, subprocess
 cold = tempfile.mkdtemp(prefix="dl_cold_")

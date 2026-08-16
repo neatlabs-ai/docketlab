@@ -31,6 +31,10 @@ jobs:
         shell: bash
         env:
           DL_HOME: ${{ runner.temp }}/dl_fixture
+          # The Windows console defaults to cp1252. Forcing it here means a
+          # non-ASCII character in a progress line fails in CI rather than on
+          # a user's terminal.
+          PYTHONIOENCODING: ${{ matrix.os == 'windows-latest' && 'cp1252' || 'utf-8' }}
         run: |
           python -m docketlab fixture | tee out.txt
           python - <<'PY'

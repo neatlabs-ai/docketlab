@@ -257,5 +257,5 @@ def run(docket_id: str, progress=None) -> dict:
         "reduction": round(1 - unique / max(len(rows), 1), 4),
     }
     store.log("dedup", str(summary))
-    say(f"collapsed {len(rows)} → {unique} analysis units")
+    say(f"collapsed {len(rows)} to {unique} analysis units")
     return summary

@@ -2,6 +2,22 @@
 
 All notable changes to DOCKETLAB.
 
+## [0.7.2] — 2026-08-16
+
+### Fixed
+- **The CLI crashed on Windows terminals.** The Windows console defaults to
+  cp1252, which cannot encode an arrow — so `collapsed 257 → 44 analysis units`
+  raised `UnicodeEncodeError` and killed the run. It never surfaced in the web
+  console, because that output goes to a browser rather than a terminal, so the
+  entire command line was broken on Windows without either of us seeing it.
+  Console streams are now reconfigured to UTF-8 with `errors="replace"` on
+  import, so an unmappable character degrades to a placeholder rather than
+  aborting an hour-long ingest, and decorative characters have been removed
+  from console strings regardless.
+- CI now forces `PYTHONIOENCODING=cp1252` on the Windows matrix, and the stress
+  suite runs the CLI under it, so this fails in testing rather than on someone's
+  machine.
+
 ## [0.7.1] — 2026-08-16
 
 ### Fixed
