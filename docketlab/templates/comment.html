@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}{{ c.comment_id }} · DOCKETLAB{% endblock %}
+{% block content %}
+
+<h2>{{ c.organization or c.submitter or 'Individual commenter' }}</h2>
+<div class="card">
+  <div class="mono muted">
+    {{ c.comment_id }} · {{ c.docket_id }} · posted {{ c.posted_date }} ·
+    {{ c.word_count }} words · {{ c.n_attachments }} attachment(s) · text from {{ c.text_source }}
+  </div>
+  {% if a %}
+  <div style="margin-top:12px">
+    <span class="chip">{{ a.stance }}</span>
+    {% for t in a.argument_types %}<span class="chip">{{ t }}</span>{% endfor %}
+    {% for p in a.provisions %}<span class="chip">§{{ p }}</span>{% endfor %}
+    {% for q in a.requested %}<span class="chip">asks: {{ q }}</span>{% endfor %}
+    {% if a.novel_evidence %}<span class="chip ev">new evidence</span>{% endif %}
+    <span class="chip">significance {{ a.significance }}</span>
+  </div>
+  {% if a.evidence_note %}<p class="mono" style="margin-bottom:0">{{ a.evidence_note }}</p>{% endif %}
+  {% endif %}
+</div>
+
+{% if d and d.campaign_id %}
+<h2>Campaign {{ d.campaign_id }}</h2>
+<div class="card">
+  <p style="margin-top:0">This submission is {{ (d.template_ratio * 100) | round(0) | int }}%
+  shared scaffold. {{ siblings | length }} sibling submission(s) carry a personal addition —
+  those additions are content the campaign template did not supply and are shown below.</p>
+  {% for s in siblings %}
+    <div class="quote mono">{{ s.insert_text }}</div>
+  {% endfor %}
+  {% if not siblings %}<p class="muted mono" style="margin-bottom:0">No personalized inserts in this campaign.</p>{% endif %}
+</div>
+{% endif %}
+
+{% if links %}
+<h2>Agency response</h2>
+{% for l in links %}
+<div class="card" style="margin-bottom:10px">
+  <div class="mono muted">
+    {{ l.response_id }}{% if l.fr_page %} · {{ l.fr_page }} FR{% endif %} ·
+    match {{ '%.2f' % l.score }} · {{ l.method }}
+    {% if l.verdict %} · <b class="v-{{ l.verdict }}">{{ l.verdict }}</b>{% endif %}
+  </div>
+  {% if l.rationale %}<p class="mono">{{ l.rationale }}</p>{% endif %}
+  <div class="mono muted" style="margin-top:10px">Agency's characterization of the comment</div>
+  <div class="quote">{{ l.comment_para }}</div>
+  <div class="mono muted">Agency's response</div>
+  <div class="quote">{{ l.response_para }}</div>
+</div>
+{% endfor %}
+{% else %}
+<h2>Agency response</h2>
+<div class="card"><span class="mark-void">no response</span>
+  <p class="muted" style="margin-bottom:0">No preamble passage matched this submission.</p></div>
+{% endif %}
+
+<h2>Submitted text</h2>
+<div class="card"><div class="quote" style="border-left-color:var(--stamp);max-height:none">{{ c.full_text }}</div></div>
+
+{% endblock %}

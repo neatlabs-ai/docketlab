@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block t1 %}on{% endblock %}
+{% block content %}
+
+<h2>Docket</h2>
+<div class="card">
+  <form method="get" action="{{ url_for('index') }}" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+    <input class="mono" name="docket" value="{{ active or '' }}" placeholder="DOD-2023-OS-0063"
+           style="flex:1;min-width:220px">
+    <input class="mono" name="limit" placeholder="cap (blank = all)" style="width:170px;flex:none">
+    <button type="submit">Select</button>
+    <a class="btn" href="{{ url_for('dockets_page') }}">Browse dockets</a>
+  </form>
+  {% if dockets %}
+  <div style="margin-top:12px" class="mono muted">
+    {% for d in dockets %}
+      <a href="{{ url_for('index', docket=d.docket_id) }}">{{ d.docket_id }}</a>
+      <span class="muted">({{ d.comments }})</span>{% if not loop.last %} · {% endif %}
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted" style="margin-bottom:0">No dockets yet. Run <b>Build fixture</b> to exercise the
+  pipeline offline, or enter a docket ID above and run <b>Pull comments</b>.
+  New here? The <a href="{{ url_for('guide_page') }}">Guide</a> walks through both in about two
+  minutes.</p>
+  {% endif %}
+</div>
+
+{% if stats %}
+<h2>Corpus</h2>
+<div class="grid">
+  <div class="stat"><div class="n">{{ stats.comments }}</div><div class="k">submissions</div></div>
+  <div class="stat"><div class="n">{{ stats.units }}</div><div class="k">analysis units</div></div>
+  <div class="stat"><div class="n">{{ stats.campaigns }}</div><div class="k">campaigns</div></div>
+  <div class="stat"><div class="n">{{ stats.with_attachments }}</div><div class="k">with attachments</div></div>
+  <div class="stat"><div class="n">{{ stats.attachment_only }}</div><div class="k">attachment-only</div></div>
+  <div class="stat"><div class="n">{{ stats.analyzed }}</div><div class="k">analyzed</div></div>
+  <div class="stat"><div class="n">{{ stats.responses }}</div><div class="k">agency responses</div></div>
+  <div class="stat"><div class="n">{{ stats.linked }}</div><div class="k">linked</div></div>
+  <div class="stat"><div class="n">{{ '{:,}'.format(stats.tokens_in + stats.tokens_out) }}</div><div class="k">tokens used</div></div>
+</div>
+{% endif %}
+
+<h2>Pipeline</h2>
+<div class="card">
+  {% macro stage(key, label, note) %}
+  <form method="post" action="{{ url_for('run_stage', stage=key) }}" style="display:inline">
+    <input type="hidden" name="docket" value="{{ active or '' }}">
+    <button type="submit" {% if running %}disabled{% endif %} title="{{ note }}">{{ label }}</button>
+  </form>
+  {% endmacro %}
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    {{ stage('fixture','Build fixture','Synthetic docket with known ground truth — no network needed') }}
+    {{ stage('ingest','Pull comments','regulations.gov v4, resumable, checkpoints every comment') }}
+    {{ stage('dedup','Find campaigns','Exact hash, MinHash, containment, template split') }}
+    {{ stage('cluster','Cluster','Local embeddings — catches paraphrase campaigns') }}
+    {{ stage('fedreg','Load final rule','Federal Register text + response-to-comments parse') }}
+    {{ stage('analyze','Extract arguments','Costs tokens — runs on analysis units only') }}
+    {{ stage('textdiff','Diff rule text','Compare proposed vs final regulatory text — catches silent fixes') }}
+    {{ stage('linkage','Link outcomes','Match comments to the agency responses') }}
+    {{ stage('score','Score fixture','Grade the pipeline against seeded ground truth') }}
+  </div>
+  <p class="mono muted" style="margin:14px 0 0">
+    embeddings: {{ backend }} ·
+    anthropic key: {% if has_key %}set{% else %}<span style="color:var(--stamp)">not set —
+    <a href="{{ url_for('settings_page') }}">add one on Settings</a>; argument extraction and
+    adjudication will be skipped until you do</span>{% endif %}
+  </p>
+</div>
+
+<h2>Run log{% if running %} — {{ running }} running{% endif %}</h2>
+<pre class="console" id="console">idle</pre>
+{% if last %}
+<p class="mono muted">last: {{ last }}</p>
+{% endif %}
+
+<script>
+const box = document.getElementById('console');
+async function tick(){
+  try{
+    const r = await fetch('{{ url_for("log") }}');
+    const d = await r.json();
+    box.textContent = d.lines.length ? d.lines.join('\n') : 'idle';
+    box.scrollTop = box.scrollHeight;
+    if(!d.running && box.dataset.was === '1'){ location.reload(); }
+    box.dataset.was = d.running ? '1' : '0';
+  }catch(e){}
+}
+tick(); setInterval(tick, 1500);
+</script>
+{% endblock %}

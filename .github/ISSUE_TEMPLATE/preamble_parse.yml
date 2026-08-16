@@ -1,0 +1,32 @@
+name: Preamble didn't parse
+description: A final rule returned zero comment/response pairs, or suspiciously low coverage
+labels: [parser, preamble]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is the most useful bug report for this project. The parser only
+        knows the conventions someone has taught it, and agencies vary.
+  - type: input
+    id: docket
+    attributes:
+      label: Docket ID
+      placeholder: DOD-2023-OS-0063
+    validations: { required: true }
+  - type: input
+    id: frdoc
+    attributes:
+      label: Federal Register document number of the final rule
+      placeholder: 2024-22905
+  - type: input
+    id: result
+    attributes:
+      label: What the log said
+      placeholder: "parsed 0 comment/response pairs (plain, coverage 2%)"
+    validations: { required: true }
+  - type: textarea
+    id: sample
+    attributes:
+      label: A short sample of how that preamble structures its responses
+      description: Two or three lines is plenty — enough to see the convention.
+      render: text

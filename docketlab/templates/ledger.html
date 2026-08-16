@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block t2 %}on{% endblock %}
+{% block title %}Ledger · DOCKETLAB{% endblock %}
+{% block content %}
+
+<h2>Adjudication ledger — {{ docket or 'no docket selected' }}</h2>
+
+{% if not rows %}
+<div class="card">
+  <p style="margin:0">Nothing to show yet. The ledger fills in as you run the pipeline:
+  find campaigns, then extract arguments, then link outcomes.</p>
+</div>
+{% else %}
+
+<p class="mono muted" style="margin:0 0 12px">
+  Sort:
+  <a href="{{ url_for('ledger', docket=docket, sort='unanswered') }}">unanswered first</a> ·
+  <a href="{{ url_for('ledger', docket=docket, sort='weight') }}">campaign weight</a> ·
+  <a href="{{ url_for('ledger', docket=docket, sort='significance') }}">significance</a>
+  &nbsp;— one row per analysis unit; campaign rows stand for every submission behind them.
+</p>
+
+<table class="ledger">
+<thead>
+<tr>
+  <th style="width:22%">Submitter</th>
+  <th style="width:11%">Weight</th>
+  <th style="width:6%">Sig</th>
+  <th>Argument</th>
+  <th style="width:22%">Agency response</th>
+</tr>
+</thead>
+<tbody>
+{% for r in rows %}
+<tr>
+  <td>
+    <div class="who">
+      <a href="{{ url_for('comment', cid=r.comment_id) }}">
+        {{ r.organization or r.submitter or 'Individual commenter' }}</a>
+    </div>
+    <div class="mono muted">{{ r.comment_id }}</div>
+    {% if r.text_source == 'attachment' %}
+      <span class="chip">attachment only</span>
+    {% endif %}
+  </td>
+  <td>
+    <span class="weight {% if r.campaign_id %}camp{% endif %}" style="width:{{ r.bar }}%"></span>
+    <span class="mono muted">
+      {% if r.campaign_id %}{{ r.campaign_size }} in campaign{% else %}single{% endif %}
+    </span>
+  </td>
+  <td><span class="sig">{{ r.significance }}</span></td>
+  <td>
+    <div class="sum">{{ r.summary or '—' }}</div>
+    <div style="margin-top:6px">
+      {% for a in r.argument_types %}<span class="chip">{{ a }}</span>{% endfor %}
+      {% for p in r.provisions %}<span class="chip">§{{ p }}</span>{% endfor %}
+      {% if r.novel_evidence %}<span class="chip ev">new evidence</span>{% endif %}
+    </div>
+  </td>
+  <td>
+    {% if r.response_id %}
+      <span class="mark-answered">
+        {% if r.fr_page %}{{ r.fr_page }} FR{% else %}preamble{% endif %}
+        {% if r.verdict %}
+          · <b class="v-{{ r.verdict }}">{{ r.verdict }}</b>
+        {% endif %}
+      </span>
+      {% if r.rationale %}<div class="mono muted" style="margin-top:5px">{{ r.rationale }}</div>{% endif %}
+    {% else %}
+      <span class="mark-void">no response</span>
+    {% endif %}
+  </td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+
+<p class="mono muted" style="margin-top:14px">
+  A "no response" mark means no passage in the final rule preamble matched this comment. That is
+  either an agency that did not engage or a preamble parser that missed — check the parse coverage
+  on the console before treating it as the former.
+</p>
+{% endif %}
+{% endblock %}

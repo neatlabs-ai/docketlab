@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block t3 %}on{% endblock %}
+{% block title %}Dockets · DOCKETLAB{% endblock %}
+{% block content %}
+
+{% if not has_regs %}
+<div class="notice bad">No regulations.gov key saved. Search and preflight will run on
+DEMO_KEY and may be throttled — add a free key on Settings first.</div>
+{% endif %}
+{% if error %}<div class="notice bad">{{ error }}</div>{% endif %}
+
+<h2>Start here</h2>
+{% for s in starters %}
+<div class="starter">
+  <h3>{{ s.label }}</h3>
+  <div class="mono muted">{{ s.docket_id }} · {{ s.agency }} · ~{{ '{:,}'.format(s.approx_comments) }} comments
+    · {{ 'closed, final rule published' if s.closed else 'still open' }}</div>
+  <p style="margin:10px 0">{{ s.why }}</p>
+  <div class="mono muted" style="margin-bottom:12px">Exercises: {{ s.tests }}</div>
+  <div class="row">
+    <a class="btn" href="{{ url_for('dockets_page', check=s.docket_id) }}">Check size</a>
+    <form method="post" action="{{ url_for('run_stage', stage='ingest') }}" style="display:flex;gap:8px;align-items:center">
+      <input type="hidden" name="docket" value="{{ s.docket_id }}">
+      <input type="text" name="limit" placeholder="cap (blank = all)" style="width:150px">
+      <button type="submit">Pull comments</button>
+    </form>
+  </div>
+</div>
+{% endfor %}
+
+<h2>Find any docket</h2>
+<div class="card">
+  <form method="get" class="row">
+    <div style="flex:1;min-width:220px">
+      <input type="text" name="q" value="{{ q }}" placeholder="e.g. cybersecurity, wetlands, overtime pay">
+    </div>
+    <button type="submit">Search</button>
+  </form>
+  {% if results %}
+  <table class="ledger" style="margin-top:14px">
+    <thead><tr><th style="width:20%">Docket</th><th>Title</th><th style="width:9%" class="hide-sm">Modified</th><th style="width:11%"></th></tr></thead>
+    <tbody>
+    {% for r in results %}
+    <tr>
+      <td class="mono">{{ r.docket_id }}<div class="muted">{{ r.agency }}</div></td>
+      <td class="sum">{{ r.title }}</td>
+      <td class="mono muted hide-sm">{{ r.modified }}</td>
+      <td><a class="btn" href="{{ url_for('dockets_page', check=r.docket_id, q=q) }}">Check</a></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% elif q %}
+  <p class="muted mono" style="margin:12px 0 0">Nothing matched. Search terms hit the docket
+  title, so try the subject rather than the rule number.</p>
+  {% endif %}
+</div>
+
+{% if pre %}
+<h2>Preflight — {{ check }}</h2>
+<div class="card">
+  {% if pre.error %}
+    <p style="margin:0;color:var(--stamp)">{{ pre.error }}</p>
+  {% else %}
+    <p style="margin:0 0 12px"><b>{{ pre.title }}</b>
+      {% if pre.raw %}<br><span class="mono muted">read as {{ pre.docket_id }} from "{{ pre.raw }}"</span>{% endif %}
+    </p>
+    <div class="grid">
+      <div class="stat"><div class="n">{{ '{:,}'.format(pre.comments or 0) }}</div><div class="k">comments</div></div>
+      <div class="stat"><div class="n">{{ '{:,}'.format(pre.requests or 0) }}</div><div class="k">API requests</div></div>
+      <div class="stat"><div class="n">{{ pre.hours }}</div><div class="k">hours of quota</div></div>
+      <div class="stat"><div class="n">{{ pre.remaining_quota or '?' }}</div><div class="k">requests left now</div></div>
+    </div>
+    <p style="margin:14px 0 12px">{{ pre.verdict }}</p>
+    <form method="post" action="{{ url_for('run_stage', stage='ingest') }}" class="row">
+      <input type="hidden" name="docket" value="{{ check }}">
+      <div><label class="f">Cap the pull (blank = everything)</label>
+        <input type="text" name="limit" placeholder="e.g. 250" style="width:180px"></div>
+      <button type="submit">Pull comments</button>
+      <a class="btn" href="{{ url_for('usage_page', docket=check, total=pre.comments) }}">Project cost</a>
+    </form>
+    <p class="mono muted" style="margin:12px 0 0">
+      A capped pull is the fast way to see a large docket work end to end. The pull is
+      resumable either way — raise the cap later and it picks up where it stopped rather
+      than re-downloading.
+    </p>
+  {% endif %}
+</div>
+{% endif %}
+
+{% endblock %}

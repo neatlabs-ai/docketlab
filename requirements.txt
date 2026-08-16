@@ -1,0 +1,24 @@
+# core — required
+flask>=3.0
+duckdb>=1.0
+pandas>=2.0
+requests>=2.31
+datasketch>=1.6
+scikit-learn>=1.3
+numpy>=1.26
+
+# attachment text extraction — strongly recommended
+# without it, PDF comments (i.e. most substantive ones) are lost
+pymupdf>=1.24
+
+# argument extraction + adjudication — needed for the LLM stages
+anthropic>=0.40
+
+# local embeddings — optional but much better than the TF-IDF fallback.
+# first run downloads ~90MB. CPU is fine; no GPU needed.
+sentence-transformers>=3.0
+
+# ── Contributors ────────────────────────────────────────────────────────────
+# No extra tooling needed. The two gates are:
+#   python -m docketlab fixture   (eight ground-truth checks)
+#   python stress.py              (~30 adversarial and scaling checks)

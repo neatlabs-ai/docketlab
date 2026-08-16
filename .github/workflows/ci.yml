@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push: { branches: [main] }
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+
+      - name: Install (without the optional embedding model)
+        run: |
+          python -m pip install --upgrade pip
+          pip install flask duckdb pandas requests datasketch scikit-learn numpy pymupdf
+
+      - name: Fixture — the eight ground-truth checks
+        shell: bash
+        env:
+          DL_HOME: ${{ runner.temp }}/dl_fixture
+        run: |
+          python -m docketlab fixture | tee out.txt
+          python - <<'PY'
+          import ast, re, sys
+          text = open("out.txt").read()
+          rows = re.findall(r"\{'exact_campaign_caught'.*?\}", text, re.S)
+          assert rows, "no fixture score found"
+          s = ast.literal_eval(rows[-1])
+          expected = {
+              "exact_campaign_caught": 1.0,
+              "near_campaign_caught": 1.0,
+              "near_inserts_recovered": 1.0,
+              "paraphrase_caught_by_minhash": 0.0,   # by design — see CONTRIBUTING
+              "paraphrase_grouped_by_embedding": 1.0,
+              "substantive_not_swept_into_campaign": 1.0,
+              "answered_linked": 1.0,
+              "unanswered_correctly_unlinked": 1.0,
+          }
+          bad = {k: (s.get(k), v) for k, v in expected.items() if s.get(k) != v}
+          if bad:
+              print("REGRESSION:", bad); sys.exit(1)
+          print("fixture 8/8")
+          PY
+
+      - name: Adversarial and scaling suite
+        env:
+          DL_HOME: ${{ runner.temp }}/dl_stress
+        run: python stress.py
+
+      - name: Routes render
+        env:
+          DL_HOME: ${{ runner.temp }}/dl_routes
+        run: |
+          python - <<'PY'
+          from docketlab.server import app
+          from docketlab import fixtures, store
+          store.init(); fixtures.build()
+          c = app.test_client()
+          paths = ["/", "/guide", "/usage", "/dockets", "/settings", "/watch",
+                   f"/metrics?docket={fixtures.DOCKET}",
+                   f"/ledger?docket={fixtures.DOCKET}",
+                   f"/export?docket={fixtures.DOCKET}"]
+          bad = [(p, c.get(p).status_code) for p in paths if c.get(p).status_code != 200]
+          assert not bad, bad
+          print(f"{len(paths)} routes OK")
+          PY

@@ -1,0 +1,373 @@
+{% extends "base.html" %}
+{% block t6 %}on{% endblock %}
+{% block title %}Guide · DOCKETLAB{% endblock %}
+{% block content %}
+
+<div class="guide">
+<aside class="rail">
+  <a href="#what">What this is</a>
+  <a href="#start">Quickstart</a>
+  <a href="#finding">Finding dockets</a>
+  <a href="#pipeline">The pipeline</a>
+  <a href="#ledger">Reading the ledger</a>
+  <a href="#metrics">Reading the metrics</a>
+  <a href="#report">The report</a>
+  <a href="#cost">Quota and cost</a>
+  <a href="#doctrine">Doctrine</a>
+  <a href="#trouble">Troubleshooting</a>
+  <a href="#glossary">Glossary</a>
+  <a href="#limits">What it can't tell you</a>
+  <a href="#about">About</a>
+</aside>
+
+<div class="body">
+
+<h2 id="about-top" style="border:0;margin-bottom:0">&nbsp;</h2>
+<h2 id="what">What this is</h2>
+<div class="card">
+  <p style="margin-top:0">When a federal agency proposes a rule, the public comments on it. The
+  agency is then legally obliged to respond to the significant comments, and it does so in the
+  preamble of the final rule — often hundreds of pages of prose.</p>
+  <p>Plenty of tools will summarize what the public said. Almost none will tell you
+  <b>what the agency did with it</b>. That's what this does: it pulls the comments, works out
+  what each one actually argued and which provision it attacked, then matches those arguments
+  against the agency's own adjudications and the changes between the proposed and final text.</p>
+  <p style="margin-bottom:0">The output is a ledger: for each submission, whether it drew a
+  response, what the agency said, and whether the rule changed. Aggregate that and you can ask
+  the question nobody has good data on — <i>what kind of comment actually works?</i></p>
+</div>
+
+<h2 id="start">Quickstart</h2>
+<div class="card">
+  <p style="margin-top:0"><b>First, the fixture.</b> No keys, no network, about ten seconds. It
+  builds a synthetic docket with problems seeded at known positions and grades the pipeline
+  against them.</p>
+  <ol class="steps">
+    <li>Console → <b>Build fixture</b></li>
+    <li><b>Find campaigns</b> → <b>Cluster</b> → <b>Link outcomes</b></li>
+    <li><b>Score fixture</b> — eight checks, and you want eight passes</li>
+  </ol>
+  <p class="mono muted">One of those eight is <i>supposed</i> to read 0%: paraphrase families
+  caught by MinHash. Lexical matching genuinely cannot see a campaign whose members each
+  reworded the sponsor's talking points. That's why the embedding stage exists, and the row
+  below it should read 100%.</p>
+
+  <p style="margin-top:20px"><b>Then a real docket.</b></p>
+  <ol class="steps">
+    <li><a href="{{ url_for('settings_page') }}">Settings</a> → paste a regulations.gov key
+      (free at api.data.gov/signup) and an Anthropic key. Test both.</li>
+    <li><a href="{{ url_for('dockets_page') }}">Dockets</a> → pick a starter or search. Hit
+      <b>Check size</b> before pulling anything large.</li>
+    <li><b>Pull comments</b> — slow by design, resumable, safe to interrupt.</li>
+    <li><b>Find campaigns</b> → <b>Cluster</b> → <b>Load final rule</b> → <b>Diff rule text</b></li>
+    <li><b>Extract arguments</b> → <b>Link outcomes</b></li>
+    <li><a href="{{ url_for('ledger') }}">Ledger</a> to read it,
+      <a href="{{ url_for('metrics_page') }}">Metrics</a> to measure it, then download the report.</li>
+  </ol>
+  <p class="mono muted" style="margin-bottom:0">Only steps 5 spend money. Everything else is
+  API quota and CPU.</p>
+</div>
+
+<h2 id="finding">Finding dockets</h2>
+<div class="card">
+  <p style="margin-top:0">Three ways in, depending on whether you already know what you're
+  looking for.</p>
+  <p><b><a href="{{ url_for('dockets_page') }}">Dockets</a></b> — you know the ID, or you can
+  search by subject. Always run <b>Check size</b> before pulling: it reports the real comment
+  count, how many API requests that costs, and how much quota you have left.</p>
+  <p><b><a href="{{ url_for('watch_page') }}">Watch</a></b> — you know the <i>sector</i> but not
+  the rulemaking. A profile is an agency set plus a subject filter, and scanning sweeps every
+  matching proposal across the window you choose. It runs on the Federal Register API, which is
+  unmetered, so a twenty-agency sweep costs no regulations.gov quota at all.</p>
+  <p>Results are classified by what you can do with them, which is the part that saves time:</p>
+  <div class="legend">
+    <div><span class="st st-open">open</span><span>The comment window is still accepting
+      filings. If you have a stake in the rule, this is a deadline, not a research target.</span></div>
+    <div><span class="st st-analyzable">analyzable</span><span>A final rule exists, so the agency
+      has published its adjudications and the outcome-linkage layer applies. These are the ones
+      worth the full pipeline.</span></div>
+    <div><span class="st st-closed">closed</span><span>The window shut but no final rule yet —
+      often sitting at OIRA. Only the front half of the pipeline works.</span></div>
+  </div>
+  <p style="margin-bottom:0"><b>Closing in 30 days</b> sweeps government-wide for comment windows
+  about to shut, ignoring your profiles entirely. Useful as a standing check regardless of what
+  you're analyzing.</p>
+</div>
+
+<h2 id="pipeline">The pipeline</h2>
+<div class="card">
+  <table class="ledger">
+    <thead><tr><th style="width:19%">Stage</th><th>What it does</th><th style="width:17%">Cost</th><th style="width:23%">What to watch</th></tr></thead>
+    <tbody>
+      <tr><td class="who">Pull comments</td>
+        <td>Fetches every comment on the docket plus attachments, extracting text from PDF and
+        Word filings.</td>
+        <td class="mono">API quota</td>
+        <td class="mono muted">WITH ATTACHMENTS, not attachment-only — a comment carrying both
+        inline text and a PDF counts as "both", so attachment-only can read zero while
+        extraction is working perfectly.</td></tr>
+      <tr><td class="who">Find campaigns</td>
+        <td>Exact hashing, then MinHash near-duplicates, then a containment pass that catches
+        form letters with a personal paragraph appended — and separates that paragraph out.</td>
+        <td class="mono">free</td>
+        <td class="mono muted">The reduction figure. Zero is correct on a docket with no
+        organized campaign.</td></tr>
+      <tr><td class="who">Cluster</td>
+        <td>Embeds each analysis unit locally and groups by meaning, catching campaigns that
+        share an argument but no wording.</td>
+        <td class="mono">free, CPU</td>
+        <td class="mono muted">The backend name. sentence-transformers is the real path;
+        tfidf-svd is the fallback.</td></tr>
+      <tr><td class="who">Load final rule</td>
+        <td>Pulls the rule text from the Federal Register and parses the preamble into
+        comment/response pairs.</td>
+        <td class="mono">free, no key</td>
+        <td class="mono muted">Pair count and coverage. Low coverage means unknown, not
+        unanswered.</td></tr>
+      <tr><td class="who">Diff rule text</td>
+        <td>Compares the codified text of the proposal against the final rule, section by
+        section.</td>
+        <td class="mono">free, no key</td>
+        <td class="mono muted">Sections found in both documents. Zero means the text markers
+        didn't match this agency's formatting.</td></tr>
+      <tr><td class="who">Extract arguments</td>
+        <td>For each unit: stance, argument grounds, provisions cited, what it asks for, whether
+        it puts new evidence on the record, and a significance score.</td>
+        <td class="mono">tokens</td>
+        <td class="mono muted">Failures should be zero. Tokens per unit tells you what a full
+        docket will cost.</td></tr>
+      <tr><td class="who">Link outcomes</td>
+        <td>Retrieves candidate responses by embedding, then asks a model whether the passage
+        actually addresses that comment and how it came out.</td>
+        <td class="mono">tokens</td>
+        <td class="mono muted">Adjudicated pairs well above the link count — that gap is the
+        model rejecting bad candidates.</td></tr>
+    </tbody>
+  </table>
+  <p class="mono muted" style="margin-bottom:0">Stages are resumable and re-runnable. Dedup,
+  cluster, diff and linkage replace their previous results. Extract arguments skips units it has
+  already done, so re-running after a bigger pull only pays for the new ones.</p>
+</div>
+
+<h2 id="ledger">Reading the ledger</h2>
+<div class="card">
+  <p style="margin-top:0">One row per <b>analysis unit</b> — a distinct submission, or one
+  campaign standing for everyone behind it. The Weight column shows how many submissions a row
+  represents.</p>
+  <p><b>Sig</b> estimates how likely the agency is to be obliged to respond. Specific, supported,
+  provision-anchored comments score high. A general expression of preference scores low. It is
+  not a measure of whether the comment is right, and it is not a measure of whether you agree.</p>
+  <p>The response column reads one of three ways:</p>
+  <div class="legend">
+    <div><span class="mark-answered">83147 FR · partial</span>
+      <span>The Federal Register page carrying the agency's response, and how it came out.
+      <b>Accepted</b> means the agency changed the rule or committed to the ask. <b>Partial</b>
+      means it moved some of the way — often conceding the framing while refusing the remedy,
+      which is the most common real outcome. <b>Rejected</b> means it declined and explained.</span></div>
+    <div><span class="chip ev">text changed at §170.17</span>
+      <span>No written response, but the section this comment cited changed between the proposal
+      and the final rule. The <b>silent grant</b>: agencies rarely write a response to "your text
+      has an error," they just fix it.</span></div>
+    <div><span class="mark-void">no response</span>
+      <span>Nothing matched, and nothing moved. Before reading this as an agency ignoring
+      someone, check two things: whether you pulled the whole docket, and what the preamble
+      parse coverage was.</span></div>
+  </div>
+  <p style="margin-bottom:0">Click any submitter to see the full submitted text beside the
+  agency's own characterization and its response, so you can judge the match yourself.</p>
+</div>
+
+<h2 id="metrics">Reading the metrics</h2>
+<div class="card">
+  <p style="margin-top:0"><b>The four-way grid</b> is the headline. Answered and changed is the
+  strongest evidence an argument landed. Changed only is the silent grant. Neither is the
+  ambiguous cell — it holds both genuine non-engagement and comments whose response you simply
+  haven't pulled yet.</p>
+  <p><b>Response rate by significance</b> is a test of the process itself. If notice-and-comment
+  works as designed, the curve rises — a well-argued, provision-anchored submission should be far
+  likelier to draw a reply than a form letter.</p>
+  <p><b>Which grounds move the agency</b> is the practical one. It crosses argument type against
+  outcome, so you can see whether cost objections, statutory authority challenges, or plain
+  technical corrections fare differently. This is the table that turns into advice about how to
+  write a comment that lands.</p>
+  <p><b>Watch the base rate on silent grants.</b> If nearly every section of a rule changed
+  between proposal and final — which happens, some rules are rewritten wholesale — then "the
+  section this comment cited changed" is true of almost everyone and tells you nothing on its
+  own. The page says so when that happens, and falls back to counting only sections that moved
+  substantially more than the rest of the rule, each shown with its magnitude.</p>
+  <p><b>Orphan responses</b> are agency adjudications matching no comment you hold. On a partial
+  pull that's expected. On a complete one it means either the parser found pairs that aren't
+  really there, or the agency was responding to comments filed outside this docket.</p>
+  <p style="margin-bottom:0">Anything computed over fewer than thirty units is labelled
+  <span class="mono">indicative only</span> and under ten as <span class="mono">too few to read
+  as a rate</span>. Those labels are not decoration — a response rate over six comments is noise
+  with a percent sign on it.</p>
+</div>
+
+<h2 id="report">The report</h2>
+<div class="card">
+  <p style="margin-top:0">Metrics → <b>Download report</b> produces a single HTML file with every
+  chart, the full ledger, and — deliberately — a methodology section and a limits section.</p>
+  <p style="margin-bottom:0">No external assets and no network calls, so it opens on any machine
+  and prints cleanly. The limits section travels with the numbers on purpose: a response rate
+  quoted without its parse coverage and corpus completeness is a figure someone will repeat in a
+  room where you aren't present to caveat it.</p>
+</div>
+
+<h2 id="cost">Quota and cost</h2>
+<div class="card">
+  <p style="margin-top:0">Two different meters, and only one of them charges you money.</p>
+  <p><b>regulations.gov quota</b> is the one that actually constrains you. A free key allows
+  1,000 requests an hour, and comment text costs one request per comment — so a 40,000-comment
+  docket is roughly 40 hours of quota, not 40 minutes of waiting. The
+  <a href="{{ url_for('usage_page') }}">Usage</a> tab reads the remaining count from the server's
+  own response header rather than a local tally, so it stays right even if you've used the key
+  elsewhere. Pulls are resumable: run out, wait for the reset, press the same button.</p>
+  <p><b>Token spend</b> comes only from Extract arguments and the adjudication half of Link
+  outcomes. Everything else — pulling, campaign detection, clustering, the Federal Register
+  fetch, the text diff — is free.</p>
+  <p><b>The projection is built from this docket, not a generic rate.</b> Once you've analyzed
+  anything, Usage knows the real cost per unit and extrapolates from the observed collapse ratio.
+  That matters because the two things driving the bill — how much a docket collapses under dedup,
+  and how long its comments run — vary enormously. A campaign-heavy docket of 40,000 can be
+  cheaper to analyze than a technical one of 400, because 39,000 of those comments are the same
+  letter.</p>
+  <p style="margin-bottom:0">Prices are editable on the Usage tab. Published rates change, and a
+  stale hardcoded figure quietly misstating your costs is worse than no figure at all.</p>
+</div>
+
+<h2 id="doctrine">Doctrine</h2>
+<div class="card">
+  <ul class="rules">
+    <li><b>Zero custody.</b> Everything runs on your machine. The corpus, the keys, and the
+    analysis never leave it — there is no server to send them to.</li>
+    <li><b>Absent is not zero.</b> An unparsed preamble is unknown, not unanswered. The interface
+    says so wherever the distinction matters.</li>
+    <li><b>Collapsing is display, never deletion.</b> Campaign members keep their own rows and
+    counts always report true submission numbers. A campaign of 40,000 is a real political fact
+    even when it contributes one argument.</li>
+    <li><b>Everything walks back.</b> Every figure traces to a comment ID, and every comment ID
+    traces to a document on regulations.gov.</li>
+    <li><b>Raw stays raw.</b> API payloads are written verbatim and never edited. Derived tables
+    can always be rebuilt.</li>
+    <li><b>Two channels, not one.</b> A comment succeeds by drawing a response <i>or</i> by
+    getting the text quietly fixed. Scoring only the first misreads the second as failure.</li>
+    <li><b>Not sentiment.</b> "73% opposed" is the least useful sentence you can write about a
+    docket. An agency isn't taking a vote.</li>
+  </ul>
+</div>
+
+<h2 id="trouble">Troubleshooting</h2>
+<div class="card">
+  <table class="ledger">
+    <thead><tr><th style="width:32%">Symptom</th><th>What's happening</th></tr></thead>
+    <tbody>
+      <tr><td class="who">Buttons greyed out</td><td>A stage is running. Only one runs at a time;
+        the page reloads itself when it finishes.</td></tr>
+      <tr><td class="who">Nothing in the log for minutes</td><td>Normal during a pull. Ingest
+        self-throttles to about 3.8 seconds per comment to stay under the hourly limit, and only
+        reports every 25.</td></tr>
+      <tr><td class="who">How much will this cost?</td><td>Usage tab. Analyze a sample first,
+        then enter the docket's full comment count and press Project.</td></tr>
+      <tr><td class="who">"quota exhausted"</td><td>You've spent 1,000 requests this hour.
+        Progress is saved — wait for the reset and press the same button; it resumes.</td></tr>
+      <tr><td class="who">Port already in use / error 10013</td><td>Windows has reserved the port.
+        Set <span class="mono">DL_PORT</span> in the launcher to something else and relaunch.</td></tr>
+      <tr><td class="who">embeddings: none</td><td>Cosmetic — the backend isn't resolved until
+        something embeds. Run Cluster and it fills in.</td></tr>
+      <tr><td class="who">Backend says tfidf-svd</td><td>sentence-transformers isn't installed or
+        its model didn't download. Everything still works, but matching is weaker.
+        <span class="mono">pip install sentence-transformers</span></td></tr>
+      <tr><td class="who">Analysis stage refuses to run</td><td>No Anthropic key saved. Everything
+        except Extract arguments and the adjudication half of Link outcomes runs without one.</td></tr>
+      <tr><td class="who">Zero comment/response pairs</td><td>That agency organizes its preamble
+        thematically instead of as Comment/Response pairs. The parser reports which convention it
+        tried; treat a low coverage figure as unknown.</td></tr>
+      <tr><td class="who">Need to query while it's running?</td><td>
+        <span class="mono">python -m docketlab inspect tables</span>,
+        <span class="mono">inspect diff</span>, <span class="mono">inspect quota</span>, or
+        <span class="mono">sql "SELECT ..."</span>. These open the database read-only, so they
+        work without stopping the console.</td></tr>
+      <tr><td class="who">Did I lose my work?</td><td>No. Everything is on disk under
+        <span class="mono">{{ home }}</span> as it happens. Only the on-screen log is
+        in memory.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h2 id="glossary">Glossary</h2>
+<div class="card">
+  <dl class="gl">
+    <dt>Docket</dt><dd>The folder holding everything about one rulemaking, including every public
+      comment. IDs look like <span class="mono">AGENCY-YYYY-NNNN</span>.</dd>
+    <dt>NPRM</dt><dd>Notice of Proposed Rulemaking — the proposal people comment on.</dd>
+    <dt>Preamble</dt><dd>The explanatory prose at the front of a rule. In a final rule it contains
+      the agency's responses to comments. It is not the regulation itself.</dd>
+    <dt>Codified text</dt><dd>The actual regulation — the numbered sections that end up in the CFR.
+      What the diff stage compares.</dd>
+    <dt>Provision</dt><dd>A specific section a comment attacks, like
+      <span class="mono">170.14(c)(4)</span>. The join key that makes outcome measurement possible,
+      which is why extraction is strict about the format.</dd>
+    <dt>Analysis unit</dt><dd>What gets analyzed: a distinct submission, or one exemplar standing
+      for a whole campaign.</dd>
+    <dt>Campaign</dt><dd>A family of identical or near-identical submissions, usually organized by
+      an advocacy group.</dd>
+    <dt>Personal insert</dt><dd>The bit a campaign participant wrote themselves. Real content the
+      template didn't supply, and the most commonly discarded signal in comment analysis.</dd>
+    <dt>Significance</dt><dd>An estimate of how likely the agency is to be obliged to respond —
+      not a measure of merit.</dd>
+    <dt>Silent grant</dt><dd>The agency changed the text a comment asked about without writing a
+      response to it.</dd>
+    <dt>Analysis unit cost</dt><dd>What one unit costs to extract and link. The number the whole
+      projection hangs on, measured rather than assumed.</dd>
+    <dt>Collapse ratio</dt><dd>The share of submissions dedup folds into campaigns. The single
+      biggest lever on what a docket costs.</dd>
+    <dt>Orphan response</dt><dd>An agency adjudication matching no comment in your corpus.</dd>
+  </dl>
+</div>
+
+<h2 id="limits">What it can't tell you</h2>
+<div class="card">
+  <p style="margin-top:0"><b>Whether a comment caused a change.</b> A section moving after a
+  comment cited it is evidence, not proof. Agencies change text for many reasons, including
+  comments that aren't in your corpus at all.</p>
+  <p><b>Why a comment went unanswered.</b> Three different things produce the same red stamp: the
+  agency didn't engage, the response sits in the part of the preamble the parser missed, or the
+  agency acted without writing about it. The diff stage separates the third. The first two need
+  you to check coverage.</p>
+  <p><b>Whether the machine judgements are right.</b> Argument types, significance, and verdicts
+  are model output. They're reproducible and every one cites a comment ID and a Federal Register
+  page — which means they're checkable, and worth checking before you quote them.</p>
+  <p><b>Whether the parser handles your agency.</b> It has been verified against DoD, whose
+  preambles use plain Comment/Response pairs. Three conventions are recognized and there are
+  certainly more. The parse line from <b>Load final rule</b> reports which matched and what
+  fraction of the preamble it covered — a low number means unknown, not unanswered.</p>
+  <p><b>That linkage is exactly reproducible.</b> Retrieval proposes candidates and a model
+  adjudicates each pair on its own, so a borderline match can fall either way between runs.
+  Aggregate rates hold steady; one borderline row may not. Open the comment and read the
+  agency's response beside the submitted text when a specific linkage matters.</p>
+  <p style="margin-bottom:0"><b>Anything about a docket you only partly pulled.</b> This is the
+  most common way to be misled here. Response rates and unanswered lists are only meaningful
+  against a complete corpus. The orphan-response count on the Metrics page is the fastest way to
+  see how far off you are.</p>
+</div>
+
+<h2 id="about">About</h2>
+<div class="card">
+  <p style="margin-top:0"><b>{{ B.ORG_TM }}</b> — {{ B.POSITIONING }}. {{ B.MISSION }}</p>
+  <p>{{ B.PRODUCT }} v{{ B.VERSION }} is open source under {{ B.LICENSE }}. Issues, patches, and
+  agency-preamble conventions we haven't seen yet are all welcome —
+  the parser only knows the formats someone has taught it.</p>
+  <p class="mono">
+    <a href="https://{{ B.SITE }}" target="_blank" rel="noopener">{{ B.SITE }}</a><br>
+    <a href="mailto:{{ B.EMAIL }}">{{ B.EMAIL }}</a><br>
+    <a href="{{ B.REPO }}" target="_blank" rel="noopener">{{ B.REPO }}</a>
+  </p>
+  <p class="muted" style="margin-bottom:0">{{ B.LEGAL }}. {{ B.API_ATTRIBUTION }} Built from
+  public data: the regulations.gov and Federal Register APIs.</p>
+</div>
+
+<h2 id="doctrine-list" style="border:0;padding:0;margin:0">&nbsp;</h2>
+</div>
+</div>
+{% endblock %}

@@ -1,0 +1,29 @@
+name: Bug
+description: Something broke or produced a wrong result
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes: { label: Version, placeholder: "0.6.0 — shown in the masthead" }
+    validations: { required: true }
+  - type: dropdown
+    id: stage
+    attributes:
+      label: Which stage
+      options: [Pull comments, Find campaigns, Cluster, Load final rule, Diff rule text,
+                Extract arguments, Link outcomes, Metrics, Report, Watch, Other]
+    validations: { required: true }
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected instead
+    validations: { required: true }
+  - type: textarea
+    id: log
+    attributes:
+      label: Run log lines
+      description: Redact freely — the docket ID and stage are usually enough.
+      render: text
+  - type: input
+    id: env
+    attributes: { label: OS and Python version, placeholder: "Windows 11, Python 3.13" }

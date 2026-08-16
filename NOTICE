@@ -1,0 +1,26 @@
+DOCKETLAB
+Copyright 2026 Security 360, LLC DBA NEATLABS(TM)
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+---
+
+This product uses the Regulations.gov Data API but is neither endorsed nor
+certified by Regulations.gov.
+
+This product uses the Federal Register API, a public service of the Office of
+the Federal Register and the Government Publishing Office.
+
+Government cannot verify and is not responsible for the quality, accuracy,
+reliability, or timeliness of any analyses conducted using data downloaded
+through these APIs.

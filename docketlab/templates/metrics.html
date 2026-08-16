@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% block t5 %}on{% endblock %}
+{% block title %}Metrics · DOCKETLAB{% endblock %}
+{% block content %}
+
+{% if not m or not m.units %}
+<h2>Metrics</h2>
+<div class="card"><p style="margin:0">Nothing to measure yet. Run the pipeline on a docket first.</p></div>
+{% else %}
+
+<h2>{{ m.docket_id }}</h2>
+<div class="grid">
+  <div class="stat"><div class="n">{{ '{:,}'.format(m.submissions) }}</div><div class="k">submissions</div></div>
+  <div class="stat"><div class="n">{{ m.units }}</div><div class="k">analysis units</div></div>
+  <div class="stat"><div class="n">{{ m.responses }}</div><div class="k">agency responses</div></div>
+  <div class="stat"><div class="n">{{ (m.response_rate * 100) | round(0) | int }}%</div><div class="k">response rate</div></div>
+  <div class="stat"><div class="n">{{ m.orphan_responses }}</div><div class="k">orphan responses</div></div>
+  <div class="stat"><div class="n">{{ m.tokens.per_unit }}</div><div class="k">tokens per unit</div></div>
+</div>
+
+<!-- ── Signature: the four-way outcome grid ─────────────────────────────── -->
+<h2>How each submission fared</h2>
+<div class="card">
+  <p class="muted" style="margin-top:0">A comment can land two ways: the agency writes a response
+  to it, or the agency quietly changes the text at the provision it cited. Counting only the
+  first scores a commenter who got exactly what they asked for as though they were ignored.</p>
+  {% set g = m.outcome_grid %}
+  {% set tot = (g.answered_changed + g.answered_only + g.changed_only + g.neither) or 1 %}
+  <div class="quad">
+    <div class="q q-both"><div class="qn">{{ g.answered_changed }}</div>
+      <div class="ql">Answered <b>and</b> text changed</div>
+      <div class="qd">Strongest evidence the argument landed.</div></div>
+    <div class="q q-ans"><div class="qn">{{ g.answered_only }}</div>
+      <div class="ql">Answered, text unchanged</div>
+      <div class="qd">Engaged on the record; provision stood.</div></div>
+    <div class="q q-silent"><div class="qn">{{ g.changed_only }}</div>
+      <div class="ql">Text changed, no response</div>
+      <div class="qd">The silent grant. Invisible to a preamble-only reading.</div></div>
+    <div class="q q-none"><div class="qn">{{ g.neither }}</div>
+      <div class="ql">Neither</div>
+      <div class="qd">No engagement found — or the comment is missing from the corpus.</div></div>
+  </div>
+  {% if not m.textdiff_available %}
+  <p class="mono" style="color:var(--stamp);margin-bottom:0">Text diff has not been run, so the
+  two right-hand cells are structurally zero. Run <b>Diff rule text</b> on the console.</p>
+  {% elif not m.textdiff.discriminating %}
+  <div class="warn">
+    <b>Read the silent-grant column with care.</b>
+    {{ m.textdiff.changed }} of {{ m.textdiff.sections }} sections
+    ({{ (m.textdiff.change_rate * 100) | round(0) | int }}%) changed between the proposed and
+    final rule — this rule was rewritten wholesale. At that base rate, "the section this comment
+    cited changed" is true of nearly every comment and so distinguishes almost nothing on its
+    own. Only sections that moved substantially more than the rest of the rule are counted here,
+    and each is shown with its magnitude.
+  </div>
+  {% else %}
+  <p class="mono muted" style="margin-bottom:0">
+    {{ m.textdiff.changed }} of {{ m.textdiff.sections }} sections changed
+    ({{ (m.textdiff.change_rate * 100) | round(0) | int }}%), median magnitude
+    {{ m.textdiff.median_magnitude }}.
+  </p>
+  {% endif %}
+</div>
+
+{% if m.silent_wins %}
+<h2>Silent grants</h2>
+<div class="card">
+  <p class="muted" style="margin-top:0">No preamble response, but the cited section changed
+  between the proposed and final rule, and moved more than the rule as a whole. Evidence of
+  influence, not proof of it — a section can change for reasons unrelated to any comment.
+  Ranked by how far the section moved.</p>
+  <table class="ledger">
+    <thead><tr><th style="width:22%">Submitter</th><th style="width:5%">Sig</th><th>Argument</th><th style="width:22%">Sections that moved</th></tr></thead>
+    <tbody>
+      {% for s in m.silent_wins %}
+      <tr>
+        <td><a href="{{ url_for('comment', cid=s.comment_id) }}" class="who">{{ s.who }}</a>
+          <div class="mono muted">{{ s.comment_id }}</div></td>
+        <td><span class="sig">{{ s.significance }}</span></td>
+        <td class="sum">{{ s.summary }}</td>
+        <td>{% for c in s.changed %}<span class="chip ev">§{{ c.section }} {{ c.change }}</span>{% endfor %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<!-- ── Does salience predict a reply? ───────────────────────────────────── -->
+<h2>Response rate by significance</h2>
+<div class="card">
+  <p class="muted" style="margin-top:0">If the process works as designed, the curve rises: a
+  specific, supported, provision-anchored comment should be far likelier to draw a response than
+  a general expression of preference.</p>
+  {% for b in m.by_significance %}
+  <div class="barrow">
+    <div class="blabel mono">{{ b.band }}</div>
+    <div class="btrack">
+      {% if b.rate is not none %}
+      <div class="bfill" style="width:{{ (b.rate * 100) | round(1) }}%"></div>
+      {% endif %}
+    </div>
+    <div class="bval mono">
+      {% if b.rate is none %}—{% else %}{{ (b.rate * 100) | round(0) | int }}%{% endif %}
+      <span class="muted">n={{ b.n }}</span>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- ── Which grounds move an agency ─────────────────────────────────────── -->
+<h2>Which grounds move the agency</h2>
+<div class="card">
+  <table class="ledger">
+    <thead><tr>
+      <th>Argument type</th><th style="width:7%">Raised</th>
+      <th style="width:26%">Answered</th><th style="width:26%">Outcome when answered</th>
+      <th style="width:9%">Reliability</th>
+    </tr></thead>
+    <tbody>
+    {% for a in m.by_argument %}
+    <tr>
+      <td class="mono">{{ a.type }}</td>
+      <td class="mono">{{ a.n }}</td>
+      <td>
+        <div class="btrack sm">{% if a.rate is not none %}<div class="bfill{% if a.thin %} thin{% endif %}" style="width:{{ (a.rate*100)|round(1) }}%"></div>{% endif %}</div>
+        <span class="mono muted">{% if a.rate is none %}—{% else %}{{ (a.rate*100)|round(0)|int }}%{% endif %}</span>
+      </td>
+      <td>
+        {% if a.answered %}
+        <div class="stack">
+          {% if a.accepted %}<span class="seg s-acc" style="width:{{ (100*a.accepted/a.answered)|round(1) }}%" title="accepted {{ a.accepted }}"></span>{% endif %}
+          {% if a.partial %}<span class="seg s-par" style="width:{{ (100*a.partial/a.answered)|round(1) }}%" title="partial {{ a.partial }}"></span>{% endif %}
+          {% if a.rejected %}<span class="seg s-rej" style="width:{{ (100*a.rejected/a.answered)|round(1) }}%" title="rejected {{ a.rejected }}"></span>{% endif %}
+        </div>
+        <span class="mono muted">{{ a.accepted }}a · {{ a.partial }}p · {{ a.rejected }}r</span>
+        {% else %}<span class="muted mono">—</span>{% endif %}
+      </td>
+      <td class="mono muted">{{ caution(a.n) or 'ok' }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <p class="mono muted" style="margin-bottom:0">
+    <span class="key s-acc"></span> accepted
+    <span class="key s-par"></span> partial
+    <span class="key s-rej"></span> rejected
+  </p>
+</div>
+
+<div class="two">
+  <div>
+    <h2>Does evidence help?</h2>
+    <div class="card">
+      {% set e = m.evidence %}
+      <div class="barrow"><div class="blabel mono">with evidence</div>
+        <div class="btrack">{% if e.with.rate is not none %}<div class="bfill ev" style="width:{{ (e.with.rate*100)|round(1) }}%"></div>{% endif %}</div>
+        <div class="bval mono">{% if e.with.rate is none %}—{% else %}{{ (e.with.rate*100)|round(0)|int }}%{% endif %} <span class="muted">n={{ e.with.n }}</span></div></div>
+      <div class="barrow"><div class="blabel mono">without</div>
+        <div class="btrack">{% if e.without.rate is not none %}<div class="bfill" style="width:{{ (e.without.rate*100)|round(1) }}%"></div>{% endif %}</div>
+        <div class="bval mono">{% if e.without.rate is none %}—{% else %}{{ (e.without.rate*100)|round(0)|int }}%{% endif %} <span class="muted">n={{ e.without.n }}</span></div></div>
+      <p class="mono muted" style="margin-bottom:0">New data, a study, or a cost estimate the
+      agency did not already have. {{ caution(e.with.n) or 'sample adequate' }}.</p>
+    </div>
+  </div>
+  <div>
+    <h2>Most contested provisions</h2>
+    <div class="card">
+      {% if m.provisions %}
+      {% set pmax = m.provisions[0].n %}
+      {% for p in m.provisions %}
+      <div class="barrow"><div class="blabel mono">§{{ p.provision }}</div>
+        <div class="btrack"><div class="bfill" style="width:{{ (100*p.n/pmax)|round(1) }}%"></div></div>
+        <div class="bval mono">{{ p.n }} <span class="muted">{{ p.answered }} ans</span></div></div>
+      {% endfor %}
+      {% else %}<p class="muted" style="margin:0">No provisions cited yet.</p>{% endif %}
+    </div>
+  </div>
+</div>
+
+{% if m.unanswered_significant %}
+<h2>Significant and unanswered</h2>
+<div class="card">
+  <p class="muted" style="margin-top:0">Scored as legally salient, matched to no preamble
+  passage, and no movement at any cited provision. Read this against the corpus size — if you
+  have not pulled the whole docket, a gap here often means the comment behind a response is
+  simply missing.</p>
+  <table class="ledger">
+    <thead><tr><th style="width:22%">Submitter</th><th style="width:5%">Sig</th><th>Argument</th><th style="width:18%">Cited</th></tr></thead>
+    <tbody>
+      {% for u in m.unanswered_significant %}
+      <tr>
+        <td><a href="{{ url_for('comment', cid=u.comment_id) }}" class="who">{{ u.who }}</a>
+          <div class="mono muted">{{ u.comment_id }}</div></td>
+        <td><span class="sig">{{ u.significance }}</span></td>
+        <td class="sum">{{ u.summary }}</td>
+        <td>{% for p in u.provisions %}<span class="chip">§{{ p }}</span>{% endfor %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<h2>Export</h2>
+<div class="card">
+  <p style="margin-top:0">A single self-contained HTML file — every chart, the full ledger, the
+  methodology, and the limits. No network, no assets, opens anywhere.</p>
+  <a class="btn" href="{{ url_for('export_report', docket=m.docket_id) }}">Download report</a>
+</div>
+
+{% endif %}
+{% endblock %}

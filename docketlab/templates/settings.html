@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block t4 %}on{% endblock %}
+{% block title %}Settings · DOCKETLAB{% endblock %}
+{% block content %}
+
+{% if notice %}<div class="notice {{ 'bad' if notice[0] == 'bad' }}">{{ notice[1] }}</div>{% endif %}
+
+<h2>Keys</h2>
+<div class="card">
+  <form method="post">
+    <label class="f">regulations.gov key — {{ regs_src }}</label>
+    <input type="text" name="regs_key" value="{{ regs_mask }}" autocomplete="off"
+           placeholder="paste key, or leave blank to use DEMO_KEY">
+    <p class="mono muted" style="margin:6px 0 0">
+      Free at <span style="color:var(--ink)">api.data.gov/signup</span>. Gives 1,000 requests
+      per hour; DEMO_KEY gives far fewer and will stall on any real docket.
+      <label style="display:inline"><input type="checkbox" name="clear_regs_key" style="width:auto"> clear</label>
+    </p>
+
+    <label class="f">Anthropic key — {{ anth_src }}</label>
+    <input type="password" name="anthropic_key" value="{{ anth_mask }}" autocomplete="off"
+           placeholder="sk-ant-...">
+    <p class="mono muted" style="margin:6px 0 0">
+      Needed for argument extraction and outcome adjudication. Everything else — ingest,
+      campaign detection, clustering, preamble parsing — runs without it.
+      <label style="display:inline"><input type="checkbox" name="clear_anthropic_key" style="width:auto"> clear</label>
+    </p>
+
+    <label class="f">Triage model — short comments and campaign exemplars</label>
+    {% if models %}
+      <select name="model_triage">
+        {% for m in models %}<option value="{{ m }}" {% if m == model_triage %}selected{% endif %}>{{ m }}</option>{% endfor %}
+      </select>
+    {% else %}
+      <input type="text" name="model_triage" value="{{ model_triage }}">
+      <p class="mono muted" style="margin:6px 0 0">Save a working key and reload to pick from
+      the models your key can actually reach.</p>
+    {% endif %}
+
+    <label class="f">Deep model — long submissions and organizational letters</label>
+    {% if models %}
+      <select name="model_deep">
+        {% for m in models %}<option value="{{ m }}" {% if m == model_deep %}selected{% endif %}>{{ m }}</option>{% endfor %}
+      </select>
+    {% else %}
+      <input type="text" name="model_deep" value="{{ model_deep }}">
+    {% endif %}
+
+    <div class="row" style="margin-top:18px">
+      <button type="submit" name="action" value="save">Save</button>
+      <button type="submit" name="action" value="test_regs">Test regulations.gov</button>
+      <button type="submit" name="action" value="test_anthropic">Test Anthropic</button>
+    </div>
+  </form>
+</div>
+
+<h2>Where this is stored</h2>
+<div class="card">
+  <p class="mono" style="margin:0 0 8px">{{ path }}</p>
+  <p class="muted" style="margin:0">
+    Outside the source folder, so re-extracting the zip never wipes your keys and nothing
+    secret sits in a directory you might zip up and send. Keys are never written to the run
+    log and only the last four characters are ever sent back to this page. An environment
+    variable, if you set one in the .bat file, takes precedence over anything saved here.
+  </p>
+</div>
+
+{% endblock %}

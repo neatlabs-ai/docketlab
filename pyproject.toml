@@ -1,0 +1,65 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "docketlab"
+version = "0.7.0"
+description = "Local-first analysis of federal rulemaking comments — and what the agency did with them"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "NEATLABS", email = "info@neatlabs.ai" }]
+keywords = [
+    "regulations.gov", "federal-register", "rulemaking", "public-comments",
+    "administrative-law", "govtech", "civic-tech", "notice-and-comment",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Web Environment",
+    "Intended Audience :: Legal Industry",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Sociology :: History",
+    "Topic :: Text Processing :: Linguistic",
+]
+
+dependencies = [
+    "flask>=3.0",
+    "duckdb>=1.0",
+    "pandas>=2.0",
+    "requests>=2.31",
+    "datasketch>=1.6",
+    "scikit-learn>=1.3",
+    "numpy>=1.26",
+    "pymupdf>=1.24",
+]
+
+[project.optional-dependencies]
+# Argument extraction and outcome adjudication.
+analysis = ["anthropic>=0.40"]
+# Local embeddings. Optional but much better than the TF-IDF fallback.
+embeddings = ["sentence-transformers>=3.0"]
+all = ["anthropic>=0.40", "sentence-transformers>=3.0"]
+
+[project.urls]
+Homepage = "https://neatlabs.ai"
+Source = "https://github.com/neatlabs-ai/docketlab"
+Issues = "https://github.com/neatlabs-ai/docketlab/issues"
+
+[project.scripts]
+docketlab = "docketlab.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["docketlab*"]
+
+[tool.setuptools.package-data]
+docketlab = ["templates/*.html"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

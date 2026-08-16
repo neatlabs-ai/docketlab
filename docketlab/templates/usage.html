@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% block t7 %}on{% endblock %}
+{% block title %}Usage · DOCKETLAB{% endblock %}
+{% block content %}
+
+{% if notice %}<div class="notice {{ 'bad' if notice[0]=='bad' }}">{{ notice[1] }}</div>{% endif %}
+
+<h2>Quota right now</h2>
+<div class="two">
+  {% for q in quotas %}
+  <div class="card">
+    <div class="mono muted" style="letter-spacing:.06em">{{ q.service }}</div>
+    <div class="gauge">
+      <div class="gfill {{ 'low' if q.pct is not none and q.pct < 20 }}"
+           style="width:{{ q.pct if q.pct is not none else 100 }}%"></div>
+    </div>
+    <div class="row" style="margin-top:9px">
+      <div><span class="big">{{ '{:,}'.format(q.remaining) }}</span>
+        <span class="mono muted">of {{ '{:,}'.format(q.limit) }} left</span></div>
+    </div>
+    <p class="mono muted" style="margin:8px 0 0">
+      {{ q.used }} calls this hour · figure from {{ q.source }}
+      {% if q.resets_in %} · window rolls off in {{ (q.resets_in // 60) }}m{% endif %}
+      {% if q.throttled %} · <span style="color:var(--stamp)">{{ q.throttled }} throttled (429)</span>{% endif %}
+    </p>
+  </div>
+  {% endfor %}
+</div>
+<p class="mono muted">A free api.data.gov key allows 1,000 requests an hour, and comment text costs
+one request per comment. The Federal Register API is unmetered. Where a figure comes from the
+server header it is authoritative; a local count is this tool's own tally and can drift if you
+used the key elsewhere.</p>
+
+<h2>Spend</h2>
+<div class="card">
+  {% if spend.by_model %}
+  <table class="ledger">
+    <thead><tr><th>Model</th><th style="width:10%">Calls</th><th style="width:16%">Input</th>
+      <th style="width:16%">Output</th><th style="width:13%">Cost</th></tr></thead>
+    <tbody>
+      {% for r in spend.by_model %}
+      <tr><td class="mono">{{ r.model }}</td><td class="mono">{{ '{:,}'.format(r.calls) }}</td>
+        <td class="mono">{{ '{:,}'.format(r.tokens_in) }}</td>
+        <td class="mono">{{ '{:,}'.format(r.tokens_out) }}</td>
+        <td class="mono"><b>${{ '%.4f' % r.cost }}</b></td></tr>
+      {% endfor %}
+      <tr><td colspan="4" class="mono muted" style="text-align:right">last {{ spend.days }} days</td>
+        <td class="mono"><b>${{ '%.4f' % spend.total }}</b></td></tr>
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted" style="margin:0">Nothing spent yet. Only the two analysis stages cost money —
+  pulling, campaign detection, clustering, the Federal Register fetch and the text diff are all
+  free.</p>
+  {% endif %}
+</div>
+
+{% if est %}
+<h2>Cost projection — {{ est.docket_id }}</h2>
+<div class="card">
+  <div class="grid">
+    <div class="stat"><div class="n">{{ '{:,}'.format(est.pulled) }}</div><div class="k">pulled</div></div>
+    <div class="stat"><div class="n">{{ '{:,}'.format(est.units) }}</div><div class="k">analysis units</div></div>
+    <div class="stat"><div class="n">{{ est.analyzed }}</div><div class="k">analyzed</div></div>
+    <div class="stat"><div class="n">${{ '%.4f' % est.spent_analysis }}</div><div class="k">spent so far</div></div>
+    <div class="stat"><div class="n">{{ est.per_unit_tokens or '—' }}</div><div class="k">tokens per unit</div></div>
+    <div class="stat"><div class="n">
+      {% if est.per_unit_cost %}${{ '%.5f' % est.per_unit_cost }}{% else %}—{% endif %}</div>
+      <div class="k">cost per unit</div></div>
+  </div>
+
+  {% if est.per_unit_cost %}
+    {% if est.units_remaining %}
+    <p style="margin:16px 0 0">Finishing what you have already pulled:
+      <b>{{ est.units_remaining }}</b> units left,
+      about <b>${{ '%.2f' % est.cost_to_finish_pulled }}</b>.</p>
+    {% else %}
+    <p style="margin:16px 0 0">Everything pulled has been analyzed.</p>
+    {% endif %}
+  {% else %}
+    <p style="margin:16px 0 0" class="muted">Run <b>Extract arguments</b> once and this fills in.
+    The projection is built from what this docket actually cost, not from a generic per-comment
+    figure — collapse ratio and comment length vary too much between dockets for that to mean
+    anything.</p>
+  {% endif %}
+
+  <form method="get" class="row" style="margin-top:18px">
+    <input type="hidden" name="docket" value="{{ est.docket_id }}">
+    <div><label class="f">Whole docket is how many comments?</label>
+      <input type="text" name="total" value="{{ est.total_comments or '' }}"
+             placeholder="e.g. 361 — Dockets tab tells you" style="width:230px"></div>
+    <button type="submit">Project</button>
+  </form>
+
+  {% if est.projected_total is defined and est.projected_total %}
+  <div class="proj">
+    <div><div class="pn">{{ '{:,}'.format(est.projected_units) }}</div><div class="pk">projected units</div></div>
+    <div><div class="pn">{{ (est.collapse_ratio * 100) | round(0) | int }}%</div><div class="pk">collapsed by dedup</div></div>
+    <div><div class="pn">${{ '%.2f' % est.projected_analysis }}</div><div class="pk">argument extraction</div></div>
+    <div><div class="pn">${{ '%.2f' % est.projected_linkage }}</div><div class="pk">outcome linkage</div></div>
+    <div class="tot"><div class="pn">${{ '%.2f' % est.projected_total }}</div><div class="pk">full docket, end to end</div></div>
+  </div>
+  <p class="mono muted" style="margin:12px 0 0">
+    Also {{ '{:,}'.format(est.api_requests) }} regulations.gov requests
+    (~{{ est.api_hours }} hours of quota) to pull the rest. The projection assumes the part you
+    have not pulled collapses at the same rate as the part you have — safe on a uniform docket,
+    optimistic if a campaign arrived late in the comment period.
+  </p>
+  {% endif %}
+</div>
+{% endif %}
+
+<h2>Prices</h2>
+<div class="card">
+  <p style="margin-top:0" class="muted">USD per million tokens. Published list prices change;
+  these are editable so a stale hardcoded figure never quietly misstates your costs.</p>
+  <form method="post">
+    <table class="ledger">
+      <thead><tr><th>Model</th><th style="width:22%">Input</th><th style="width:22%">Output</th></tr></thead>
+      <tbody>
+        {% for name, p in prices.items() %}
+        <tr><td class="mono">{{ name }}</td>
+          <td><input type="text" name="in__{{ name }}" value="{{ p['in'] }}"></td>
+          <td><input type="text" name="out__{{ name }}" value="{{ p['out'] }}"></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="row" style="margin-top:14px">
+      <button type="submit" name="action" value="save_prices">Save prices</button>
+      <button type="submit" name="action" value="reset_prices">Reset to defaults</button>
+    </div>
+  </form>
+</div>
+
+<h2>Recent calls</h2>
+<div class="card">
+  {% if recent %}
+  <table class="ledger">
+    <thead><tr><th style="width:17%">When</th><th style="width:17%">Service</th><th>Endpoint</th>
+      <th style="width:9%">Status</th><th style="width:19%">Tokens</th></tr></thead>
+    <tbody>
+      {% for c in recent %}
+      <tr><td class="mono muted">{{ c.ts }}</td><td class="mono">{{ c.service }}</td>
+        <td class="mono">{{ c.endpoint }}{% if c.model %} <span class="muted">{{ c.model }}</span>{% endif %}</td>
+        <td class="mono {{ 'v-rejected' if c.status and c.status >= 400 }}">{{ c.status or '—' }}</td>
+        <td class="mono muted">{% if c.tokens_in %}{{ '{:,}'.format(c.tokens_in) }} in / {{ '{:,}'.format(c.tokens_out) }} out{% else %}—{% endif %}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="muted" style="margin:0">No API calls recorded yet.</p>{% endif %}
+</div>
+
+{% endblock %}
