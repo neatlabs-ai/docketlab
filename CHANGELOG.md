@@ -2,6 +2,20 @@
 
 All notable changes to DOCKETLAB.
 
+## [0.7.3] — 2026-08-16
+
+### Changed
+- **CI checks are now scripts in `ci/`, not Python embedded in workflow YAML.**
+  Heredocs (`python - <<'PY'`) are a shell feature; PowerShell reads `<<` as a
+  redirection operator, so those steps died on Windows runners before Python
+  started. Real files run identically on every platform and can be run by hand
+  when something breaks: `python ci/check_fixture.py`, `python ci/check_routes.py`.
+- The stress suite no longer assumes `/tmp` exists or that the working directory
+  is the repository root — it uses `tempfile.gettempdir()` and passes
+  `PYTHONPATH` to every subprocess it spawns.
+- CI runs the fixture twice on every platform: once normally and once under
+  `PYTHONIOENCODING=cp1252`.
+
 ## [0.7.2] — 2026-08-16
 
 ### Fixed

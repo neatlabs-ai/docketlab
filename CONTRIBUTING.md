@@ -34,7 +34,14 @@ mean the check has stopped measuring anything.
 python stress.py                 # ~30 adversarial and scaling checks
 ```
 
-Both must pass before a pull request.
+```bash
+python ci/check_fixture.py   # the eight checks, asserted
+python ci/check_routes.py    # every page renders, including not-ready states
+```
+
+All four must pass before a pull request. They are the same scripts CI runs, so
+a green local run means a green remote one — no YAML-embedded code that behaves
+differently under a different shell.
 
 ## Changing the schema
 

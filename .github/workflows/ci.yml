@@ -5,6 +5,8 @@ on:
   pull_request:
   workflow_dispatch:
 
+# No shell-specific syntax anywhere in this file. Every check is a script in
+# ci/, so it runs identically on PowerShell and bash and can be run by hand.
 jobs:
   verify:
     runs-on: ${{ matrix.os }}
@@ -13,6 +15,9 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
         python: ["3.11", "3.12", "3.13"]
+
+    env:
+      DL_HOME: ${{ github.workspace }}/.dl_ci
 
     steps:
       - uses: actions/checkout@v4
@@ -28,73 +33,23 @@ jobs:
           pip install flask duckdb pandas requests datasketch scikit-learn numpy pymupdf
 
       - name: Fixture — the eight ground-truth checks
-        shell: bash
+        run: python ci/check_fixture.py
+
+      - name: Fixture again, under a legacy console encoding
+        # The Windows console defaults to cp1252, which cannot encode an arrow.
+        # Forcing it means a non-ASCII character in a progress line fails here
+        # rather than on a user's terminal.
         env:
-          DL_HOME: ${{ runner.temp }}/dl_fixture
-          # The Windows console defaults to cp1252. Forcing it here means a
-          # non-ASCII character in a progress line fails in CI rather than on
-          # a user's terminal.
-          PYTHONIOENCODING: ${{ matrix.os == 'windows-latest' && 'cp1252' || 'utf-8' }}
-        run: |
-          python -m docketlab fixture | tee out.txt
-          python - <<'PY'
-          import ast, re, sys
-          text = open("out.txt").read()
-          rows = re.findall(r"\{'exact_campaign_caught'.*?\}", text, re.S)
-          assert rows, "no fixture score found"
-          s = ast.literal_eval(rows[-1])
-          expected = {
-              "exact_campaign_caught": 1.0,
-              "near_campaign_caught": 1.0,
-              "near_inserts_recovered": 1.0,
-              "paraphrase_caught_by_minhash": 0.0,   # by design — see CONTRIBUTING
-              "paraphrase_grouped_by_embedding": 1.0,
-              "substantive_not_swept_into_campaign": 1.0,
-              "answered_linked": 1.0,
-              "unanswered_correctly_unlinked": 1.0,
-          }
-          bad = {k: (s.get(k), v) for k, v in expected.items() if s.get(k) != v}
-          if bad:
-              print("REGRESSION:", bad); sys.exit(1)
-          print("fixture 8/8")
-          PY
+          PYTHONIOENCODING: cp1252
+          DL_HOME: ${{ github.workspace }}/.dl_ci_cp1252
+        run: python -m docketlab fixture
 
       - name: Adversarial and scaling suite
         env:
-          DL_HOME: ${{ runner.temp }}/dl_stress
+          DL_HOME: ${{ github.workspace }}/.dl_ci_stress
         run: python stress.py
 
-      - name: Routes render
+      - name: Routes render, including the not-ready states
         env:
-          DL_HOME: ${{ runner.temp }}/dl_routes
-        run: |
-          python - <<'PY'
-          from docketlab.server import app
-          from docketlab import dedup, fixtures, semantic, store
-          store.init(); fixtures.build()
-          c = app.test_client()
-
-          # Before the pipeline runs there is nothing to report. That is a
-          # normal state, not a server error, and must not 500.
-          pre = c.get(f"/export?docket={fixtures.DOCKET}")
-          assert pre.status_code == 409, f"pre-pipeline export: {pre.status_code}"
-
-          dedup.run(fixtures.DOCKET)
-          semantic.cluster(fixtures.DOCKET)
-
-          paths = ["/", "/guide", "/usage", "/dockets", "/settings", "/watch",
-                   f"/metrics?docket={fixtures.DOCKET}",
-                   f"/ledger?docket={fixtures.DOCKET}",
-                   f"/export?docket={fixtures.DOCKET}",
-                   "/export",                       # no docket at all
-                   "/ledger?docket=NOPE-9999-0001", # unknown docket
-                   "/metrics?docket=NOPE-9999-0001"]
-          expected = {"/export": 400}
-          bad = []
-          for path in paths:
-              code = c.get(path).status_code
-              if code != expected.get(path, 200):
-                  bad.append((path, code))
-          assert not bad, bad
-          print(f"{len(paths)} routes OK")
-          PY
+          DL_HOME: ${{ github.workspace }}/.dl_ci_routes
+        run: python ci/check_routes.py

@@ -30,4 +30,4 @@ for _stream in ("stdout", "stderr"):
             _s.reconfigure(encoding="utf-8", errors="replace")
         except (ValueError, OSError):
             pass
-__version__ = "0.7.2"
+__version__ = "0.7.3"

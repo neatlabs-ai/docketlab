@@ -20,8 +20,13 @@ import os
 import sys
 import time
 
-os.environ.setdefault("DL_HOME", "/tmp/stress_dl")
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import tempfile
+
+_ROOT = os.path.dirname(os.path.abspath(__file__))
+# tempfile.gettempdir() rather than a hardcoded /tmp — Windows has no /tmp, and
+# these subprocess probes have to run on the same platforms as the product.
+os.environ.setdefault("DL_HOME", os.path.join(tempfile.gettempdir(), "dl_stress"))
+sys.path.insert(0, _ROOT)
 
 from docketlab import (dedup, extract, fedreg, metrics, provisions, report,  # noqa
                        semantic, store)
@@ -231,7 +236,7 @@ rows = store.read_query("SELECT section, proposed_text FROM textdiff").to_dict("
 print("MIGRATED" if need <= cols else "MISSING", rows)
 """
 _out = _sp.run([sys.executable, "-c", _probe], capture_output=True, text=True,
-               cwd=os.path.dirname(os.path.abspath(__file__)))
+               errors="replace", cwd=_ROOT, env={**os.environ, "PYTHONPATH": _ROOT})
 check("old database gains new columns", "MIGRATED" in _out.stdout,
       (_out.stdout + _out.stderr).strip().splitlines()[-1] if (_out.stdout or _out.stderr) else "")
 check("existing rows survive migration", "170.4" in _out.stdout and "old body" in _out.stdout)
@@ -254,7 +259,7 @@ unk = c.get("/ledger?docket=NOPE-9999-0001").status_code
 print("RESULT", pre, none, post, unk)
 """
 _o2 = _sp2.run([sys.executable, "-c", _p2], capture_output=True, text=True,
-               cwd=os.path.dirname(os.path.abspath(__file__)))
+               cwd=_ROOT, env={**os.environ, "PYTHONPATH": _ROOT})
 _line = [l for l in _o2.stdout.splitlines() if l.startswith("RESULT")]
 _got = _line[0] if _line else (_o2.stderr.strip().splitlines() or [""])[-1]
 check("export before pipeline explains rather than 500s", "RESULT 409" in _got, _got)
@@ -266,8 +271,9 @@ print("\n=== legacy console encoding (the Windows cp1252 default) ===")
 _enc = _tf2.mkdtemp(prefix="dl_enc_")
 _eo = _sp2.run([sys.executable, "-m", "docketlab", "fixture"],
                capture_output=True, text=True, errors="replace",
-               cwd=os.path.dirname(os.path.abspath(__file__)),
-               env={**os.environ, "DL_HOME": _enc, "PYTHONIOENCODING": "cp1252"})
+               cwd=_ROOT,
+               env={**os.environ, "DL_HOME": _enc, "PYTHONIOENCODING": "cp1252",
+                    "PYTHONPATH": _ROOT})
 check("CLI survives a cp1252 console", _eo.returncode == 0,
       (_eo.stderr.strip().splitlines() or ["?"])[-1][:120])
 check("no UnicodeEncodeError", "UnicodeEncodeError" not in (_eo.stdout + _eo.stderr))
@@ -285,7 +291,7 @@ bad = [(p, c.get(p).status_code) for p in paths if c.get(p).status_code != 200]
 print("BAD" if bad else "OK", bad)
 """
 out = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True,
-                     cwd=os.path.dirname(os.path.abspath(__file__)))
+                     cwd=_ROOT, env={**os.environ, "PYTHONPATH": _ROOT})
 check("all pages render with zero data", "OK []" in out.stdout,
       (out.stdout + out.stderr).strip().splitlines()[-1] if (out.stdout or out.stderr) else "")
 shutil.rmtree(cold, ignore_errors=True)
