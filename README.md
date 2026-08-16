@@ -49,25 +49,6 @@ Full operating manual: [docs/OPERATING.md](docs/OPERATING.md).
 
 ---
 
-## What it looks like
-
-<p align="center"><img src="docs/img/ledger.png" alt="The adjudication ledger: one row per submission, with the agency's response and verdict" width="880"></p>
-
-The **ledger** — one row per submission, with the Federal Register page carrying
-the agency's response and whether it was accepted, partially accepted, or
-rejected.
-
-<p align="center"><img src="docs/img/metrics.png" alt="Metrics: the four-way outcome grid" width="880"></p>
-
-The **four-way grid** — answered and changed, answered only, changed with no
-response (the silent grant), neither. With the base-rate warning that appears
-when a rule was rewritten wholesale.
-
-<p align="center"><img src="docs/img/silent-grants.png" alt="Silent grants: comments with no response whose cited section moved" width="880"></p>
-
-**Silent grants** — comments that drew no written response but whose cited
-section moved more than the rule as a whole.
-
 ## Two channels, not one
 
 The insight that makes this different from comment summarization.
