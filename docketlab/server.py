@@ -439,11 +439,29 @@ def export_report():
 
     docket = request.args.get("docket")
     if not docket:
-        return "No docket selected", 400
+        return render_template("notready.html", reason="No docket selected."), 400
+    have = store.scalar(
+        "SELECT count(*) FROM dedup d JOIN comments c USING (comment_id) "
+        "WHERE c.docket_id = ?", [docket]
+    ) or 0
+    if not have:
+        # Not an error — the pipeline simply hasn't run yet. Say which stage.
+        pulled = store.scalar(
+            "SELECT count(*) FROM comments WHERE docket_id = ?", [docket]) or 0
+        reason = (
+            f"{docket} has {pulled} comments but no analysis units yet — run "
+            "<b>Find campaigns</b> first."
+            if pulled else
+            f"Nothing pulled for {docket} yet — run <b>Pull comments</b> first."
+        )
+        return render_template("notready.html", reason=reason, docket=docket), 409
     try:
         body = report.build(docket, progress=say)
     except Exception as e:
-        return f"Could not build report: {e}", 500
+        return render_template(
+            "notready.html", docket=docket,
+            reason=f"The report could not be built: {e}"
+        ), 500
     stamp = datetime.now().strftime("%Y%m%d")
     name = f"docketlab_{docket.replace('/', '-')}_{stamp}.html"
     return Response(

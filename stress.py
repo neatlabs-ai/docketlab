@@ -237,6 +237,31 @@ check("old database gains new columns", "MIGRATED" in _out.stdout,
 check("existing rows survive migration", "170.4" in _out.stdout and "old body" in _out.stdout)
 _sh.rmtree(_old, ignore_errors=True)
 
+print("\n=== asking for output before the pipeline has run ===")
+import subprocess as _sp2, tempfile as _tf2, shutil as _sh2
+_nr = _tf2.mkdtemp(prefix="dl_nr_")
+_p2 = f"""
+import os; os.environ["DL_HOME"] = {_nr!r}
+from docketlab.server import app
+from docketlab import dedup, fixtures, semantic, store
+store.init(); fixtures.build()
+c = app.test_client()
+pre = c.get("/export?docket=" + fixtures.DOCKET).status_code
+none = c.get("/export").status_code
+dedup.run(fixtures.DOCKET); semantic.cluster(fixtures.DOCKET)
+post = c.get("/export?docket=" + fixtures.DOCKET).status_code
+unk = c.get("/ledger?docket=NOPE-9999-0001").status_code
+print("RESULT", pre, none, post, unk)
+"""
+_o2 = _sp2.run([sys.executable, "-c", _p2], capture_output=True, text=True,
+               cwd=os.path.dirname(os.path.abspath(__file__)))
+_line = [l for l in _o2.stdout.splitlines() if l.startswith("RESULT")]
+_got = _line[0] if _line else (_o2.stderr.strip().splitlines() or [""])[-1]
+check("export before pipeline explains rather than 500s", "RESULT 409" in _got, _got)
+check("export with no docket is a 400", " 400 " in _got, _got)
+check("export after pipeline succeeds", _got.endswith("200 200"), _got)
+_sh2.rmtree(_nr, ignore_errors=True)
+
 print("\n=== cold start: every page on a fresh install with no data ===")
 import shutil, tempfile, subprocess
 cold = tempfile.mkdtemp(prefix="dl_cold_")

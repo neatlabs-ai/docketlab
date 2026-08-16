@@ -66,14 +66,31 @@ jobs:
         run: |
           python - <<'PY'
           from docketlab.server import app
-          from docketlab import fixtures, store
+          from docketlab import dedup, fixtures, semantic, store
           store.init(); fixtures.build()
           c = app.test_client()
+
+          # Before the pipeline runs there is nothing to report. That is a
+          # normal state, not a server error, and must not 500.
+          pre = c.get(f"/export?docket={fixtures.DOCKET}")
+          assert pre.status_code == 409, f"pre-pipeline export: {pre.status_code}"
+
+          dedup.run(fixtures.DOCKET)
+          semantic.cluster(fixtures.DOCKET)
+
           paths = ["/", "/guide", "/usage", "/dockets", "/settings", "/watch",
                    f"/metrics?docket={fixtures.DOCKET}",
                    f"/ledger?docket={fixtures.DOCKET}",
-                   f"/export?docket={fixtures.DOCKET}"]
-          bad = [(p, c.get(p).status_code) for p in paths if c.get(p).status_code != 200]
+                   f"/export?docket={fixtures.DOCKET}",
+                   "/export",                       # no docket at all
+                   "/ledger?docket=NOPE-9999-0001", # unknown docket
+                   "/metrics?docket=NOPE-9999-0001"]
+          expected = {"/export": 400}
+          bad = []
+          for path in paths:
+              code = c.get(path).status_code
+              if code != expected.get(path, 200):
+                  bad.append((path, code))
           assert not bad, bad
           print(f"{len(paths)} routes OK")
           PY

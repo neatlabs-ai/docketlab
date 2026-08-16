@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Not ready · DOCKETLAB{% endblock %}
+{% block content %}
+<h2>Nothing to report yet</h2>
+<div class="card">
+  <p style="margin-top:0">{{ reason | safe }}</p>
+  <p class="muted">A report needs, at minimum, comments pulled and campaigns found.
+  Argument extraction and outcome linkage fill in the rest — the report renders whatever
+  has run and says plainly what hasn't.</p>
+  <div class="row" style="margin-top:16px">
+    <a class="btn" href="{{ url_for('index', docket=docket) }}">Back to the console</a>
+    <a class="btn" href="{{ url_for('guide_page') }}#start">Quickstart</a>
+  </div>
+</div>
+{% endblock %}

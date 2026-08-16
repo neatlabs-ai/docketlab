@@ -13,4 +13,4 @@
 # limitations under the License.
 
 """DOCKETLAB — local-first federal rulemaking comment analysis."""
-__version__ = "0.7.0"
+__version__ = "0.7.1"

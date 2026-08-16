@@ -2,6 +2,16 @@
 
 All notable changes to DOCKETLAB.
 
+## [0.7.1] — 2026-08-16
+
+### Fixed
+- **Requesting a report before running the pipeline returned a 500.** Asking for
+  output that doesn't exist yet is an ordinary thing to do, not a server fault.
+  It now returns a page naming the stage to run first. Found by CI on its first
+  run, which is what CI is for.
+- The routes step in CI asserted only the happy path. It now covers the
+  pre-pipeline case, a missing docket parameter, and an unknown docket ID.
+
 ## [0.7.0] — 2026-08-16
 
 First release prepared for publication.
