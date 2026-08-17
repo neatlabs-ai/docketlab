@@ -69,7 +69,7 @@ def compute(docket_id: str) -> dict:
         return m
 
     changed = textdiff.outcome_map(docket_id)
-    m["textdiff"] = textdiff.summary()
+    m["textdiff"] = textdiff.summary(docket_id)
     m["textdiff_available"] = m["textdiff"].get("available", False)
 
     analyzed = base[base.significance.notna()]
@@ -77,7 +77,10 @@ def compute(docket_id: str) -> dict:
     m["submissions"] = store.scalar(
         "SELECT count(*) FROM comments WHERE docket_id = ?", [docket_id]
     ) or 0
-    m["responses"] = store.scalar("SELECT count(*) FROM responses") or 0
+    m["responses"] = store.scalar(
+        "SELECT count(*) FROM responses r "
+        "JOIN documents d ON d.fr_doc_number = r.document_id "
+        "WHERE d.docket_id = ?", [docket_id]) or 0
 
     # ── Corpus shape ─────────────────────────────────────────────────────────
     m["text_source"] = dict(Counter(base.text_source.dropna()))
@@ -93,9 +96,14 @@ def compute(docket_id: str) -> dict:
     m["stances"] = dict(Counter(analyzed.stance.dropna()))
 
     # Orphaned adjudications: agency responses matching nothing in the corpus.
+    # Scoped to this docket's own final rule. Counting the whole table reported
+    # another docket's unmatched adjudications as this one's.
     orphans = store.scalar(
-        "SELECT count(*) FROM responses WHERE response_id NOT IN "
-        "(SELECT response_id FROM linkage WHERE response_id IS NOT NULL)"
+        "SELECT count(*) FROM responses r "
+        "JOIN documents d ON d.fr_doc_number = r.document_id "
+        "WHERE d.docket_id = ? AND r.response_id NOT IN "
+        "(SELECT response_id FROM linkage WHERE response_id IS NOT NULL)",
+        [docket_id],
     ) or 0
     m["orphan_responses"] = int(orphans)
 

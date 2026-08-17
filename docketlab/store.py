@@ -115,6 +115,7 @@ CREATE TABLE IF NOT EXISTS linkage (
 );
 
 CREATE TABLE IF NOT EXISTS textdiff (
+    docket_id      VARCHAR,        -- without this a second docket overwrote the first
     section        VARCHAR,
     sort_key       DOUBLE,        -- 170.2 sorts before 170.10, unlike the string
     change_kind    VARCHAR,       -- added / removed / modified / rewritten / unchanged

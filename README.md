@@ -129,6 +129,19 @@ The 0% row is the point. MinHash cannot see a campaign whose members each ran th
 
 ## Validation status
 
+**Four significant bugs in this area were found and fixed after release**, all
+reported with reproduction scripts by [@abigailhaddad](https://github.com/abigailhaddad):
+document selection choosing a correction over the final rule, the `plain`
+convention opening pairs on ordinary prose (37% recall on one SSA rule), an
+unbounded comment side stored as a truncated fragment, and `textdiff` being
+global so a second docket overwrote the first. See the changelog. The parser now
+prefers structural XML parsing over regex, which removes the class of failure
+behind the middle two.
+
+The CMMC results below were unaffected by two of those bugs only by luck — that
+docket has no correction document and parses at 100% recall. Every other docket
+was exposed.
+
 **The preamble parser has been verified against one agency.** Every figure in
 this README — 114 comment/response pairs at 68% coverage, the outcome linkage,
 the silent grants — comes from `DOD-2023-OS-0063` (CMMC, 32 CFR 170). DoD writes

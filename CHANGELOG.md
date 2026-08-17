@@ -2,6 +2,64 @@
 
 All notable changes to DOCKETLAB.
 
+## [0.8.0] — 2026-08-17
+
+Four bugs reported by [@abigailhaddad](https://github.com/abigailhaddad), each
+with a reproduction script and measured evidence. All four were real, and two of
+them meant the tool produced wrong output on most dockets while appearing to
+work on the one it had been validated against.
+
+### Fixed
+- **#1 — document selection picked a correction instead of the final rule.**
+  Corrections, interim final rules and technical amendments all carry
+  `type: "Rule"`; supplemental proposals carry `type: "Proposed Rule"`. Choosing
+  on type alone selected a 78-page correction over a 408-page final rule on
+  `EPA-HQ-OAR-2021-0317`, and the superseded 2021 proposal over the 2022
+  supplemental — so the preamble parse and the text diff both ran on the wrong
+  documents. Selection now reads the `action` field, rejects ancillary actions,
+  prefers a plain final rule over an interim one, breaks ties on page count, and
+  logs which document it chose and why. `find_documents` is also paginated; it
+  previously asked for fifty and stopped.
+- **#2 — the `plain` convention opened pairs on ordinary prose.** The label
+  accepted a full stop as well as a colon, so any sentence ending "...we
+  received comments." started a match, and because `finditer` resumes at the end
+  of each match one spurious start shifted every following boundary. Measured
+  recall was 37% on SSA `2026-13420`, where the first match began 5,628
+  characters before the document's first real label and 17 of 26 surviving pairs
+  began inside a Response. Labels are now anchored to the start of a line and
+  require a colon.
+- **#3 — the comment side of a pair had no size bound.** Only the response side
+  was checked against 20,000 characters; the comment side was then truncated to
+  12,000 on the way into the store, so an overlong match was kept rather than
+  rejected. On CMMC the largest comment side ran 153,766 characters from
+  preamble prose into codified rule text, and the stored 12,000-character
+  fragment is what linkage embedded and what the adjudicator was shown as the
+  agency's paraphrase. Both sides are now bounded and an overlong match is
+  dropped whole.
+- **#4 — `textdiff` and `responses` were global, so a second docket overwrote
+  the first.** `textdiff` had no `docket_id` and was cleared unconditionally;
+  `linkage` fell back to selecting every row in `responses` with no docket
+  filter, which linked one docket's comments against another's adjudications;
+  and the metrics counted the whole table. All three are now scoped, and the
+  linkage fallback is gone — reporting nothing is better than reporting the
+  wrong docket.
+
+### Added
+- **Structural parsing, preferred over the regex conventions.** Following #5:
+  the Federal Register publishes full text as XML in which each paragraph is its
+  own element and a Comment or Response label opens a paragraph. Matching on
+  element boundaries removes the whole class of failure that regex over
+  flattened text creates — prose cannot open a pair because it is not the start
+  of a paragraph, and a match cannot run past its paragraph into rule text. The
+  regex conventions remain as a fallback, and the parse reports which was used.
+
+### Note on what this means for earlier results
+The CMMC run reported in the README was unaffected by #1 and #2 by luck:
+`DOD-2023-OS-0063` has no correction document, and its preamble scores 100%
+recall on the `plain` convention. Every other docket was exposed. The "validated
+against one agency" caveat in the README was carrying more weight than its
+phrasing conveyed.
+
 ## [0.7.3] — 2026-08-16
 
 ### Changed

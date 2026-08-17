@@ -279,6 +279,94 @@ check("CLI survives a cp1252 console", _eo.returncode == 0,
 check("no UnicodeEncodeError", "UnicodeEncodeError" not in (_eo.stdout + _eo.stderr))
 _sh2.rmtree(_enc, ignore_errors=True)
 
+print("\n=== reported by abigailhaddad, issues #1-#4 ===")
+from docketlab import fedreg as _fr, textdiff as _td2
+
+# #1 - a correction is typed "Rule" and was selected over the real final rule.
+_DOCS = [
+ {"document_number":"2021-24202","type":"Proposed Rule","publication_date":"2021-11-15",
+  "action":"Proposed rule.","start_page":1,"end_page":154},
+ {"document_number":"2021-27312","type":"Proposed Rule","publication_date":"2021-12-17",
+  "action":"Proposed rulemaking; extension of public comment period.","start_page":1,"end_page":2},
+ {"document_number":"2022-24675","type":"Proposed Rule","publication_date":"2022-12-06",
+  "action":"Supplemental notice of proposed rulemaking.","start_page":1,"end_page":146},
+ {"document_number":"2024-00366","type":"Rule","publication_date":"2024-03-08",
+  "action":"Final rule.","start_page":1,"end_page":408},
+ {"document_number":"2024-13206","type":"Rule","publication_date":"2024-08-01",
+  "action":"Interim final rule; correction; request for comments.","start_page":1,"end_page":78},
+]
+_f, _fw = _fr._pick(_DOCS, "Rule")
+_n, _nw = _fr._pick(_DOCS, "Proposed Rule")
+check("the final rule is chosen over a later correction",
+      _f["document_number"] == "2024-00366", f"chose {_f['document_number']}")
+check("the supplemental proposal supersedes the original",
+      _n["document_number"] == "2022-24675", f"chose {_n['document_number']}")
+check("a comment-period extension is not treated as a proposal",
+      _n["document_number"] != "2021-27312")
+check("the selection explains itself", any("chose" in x for x in _fw), str(_fw[:2]))
+
+# #2 - prose ending "...we received comments." opened a pair.
+_PROSE = ("The agency reviewed the record. In response to the notice we received comments. "
+          "Commenters raised concerns about methodology and the underlying data at length.\n\n"
+          "Comment: " + "a real comment sentence " * 4 + "\n"
+          "Response: " + "a real response sentence " * 4 + "\n")
+_d2 = _fr.parse_responses("T-PROSE", _PROSE)
+_rows = store.read_query(
+    "SELECT comment_para FROM responses WHERE document_id='T-PROSE'").to_dict("records")
+check("ordinary prose no longer opens a pair",
+      _rows and "we received comments" not in _rows[0]["comment_para"],
+      (_rows[0]["comment_para"][:60] if _rows else "no pairs"))
+check("the real pair is still found", len(_rows) == 1, f"{len(_rows)} pairs")
+
+# #3 - the comment side had no bound and was truncated into the store.
+_LONG = ("Comment: " + "x" * 60000 + "\nResponse: " + "y" * 200 + "\n"
+         "Comment: " + "a short real comment sentence " * 3 + "\n"
+         "Response: " + "a short real response sentence " * 3 + "\n")
+_fr.parse_responses("T-LONG", _LONG)
+_lrows = store.read_query(
+    "SELECT comment_para FROM responses WHERE document_id='T-LONG'").to_dict("records")
+check("an overlong comment side is rejected, not truncated",
+      all(len(r["comment_para"]) < 20000 for r in _lrows) and
+      not any(r["comment_para"].startswith("xxx") for r in _lrows),
+      f"{len(_lrows)} pairs kept")
+check("nothing stored is a fragment of a dropped match",
+      all(len(r["comment_para"]) <= _fr.MAX_SIDE for r in _lrows))
+
+# #4 - textdiff and responses were global.
+with store.db() as _c9:
+    _c9.execute("DELETE FROM textdiff")
+store.upsert("textdiff", [
+    {"docket_id": "DOCKET-A", "section": "170.1", "sort_key": 170.001,
+     "change_kind": "modified", "similarity": 0.5, "magnitude": 0.5,
+     "words_proposed": 10, "words_final": 12, "proposed_text": "a", "final_text": "b"},
+    {"docket_id": "DOCKET-B", "section": "72.210", "sort_key": 72.21,
+     "change_kind": "modified", "similarity": 0.5, "magnitude": 0.5,
+     "words_proposed": 10, "words_final": 12, "proposed_text": "a", "final_text": "b"},
+])
+_a_rows = store.read_query(
+    "SELECT section FROM textdiff WHERE docket_id='DOCKET-A'").section.tolist()
+check("a second docket's diff does not displace the first",
+      _a_rows == ["170.1"], str(_a_rows))
+_sa = _td2.summary("DOCKET-A")
+check("the diff summary is scoped to one docket", _sa["sections"] == 1, str(_sa["sections"]))
+
+print("\n=== structural parsing prefers element boundaries ===")
+_SXML = ("<?xml version='1.0'?><RULE>"
+         "<P>In response to the notice we received comments.</P>"
+         "<P>Comment: " + "a genuine comment sentence " * 4 + "</P>"
+         "<P>continuation of that comment, longer than forty characters here.</P>"
+         "<P>Response: " + "a genuine response sentence " * 4 + "</P>"
+         "</RULE>")
+_sp, _sd = _fr.parse_structural("T-STRUCT", _SXML)
+check("structural parsing finds the pair", len(_sp) == 1, str(len(_sp)))
+check("a prose paragraph cannot open a pair",
+      not any("we received comments" in c for _, c, _ in _sp))
+check("continuation paragraphs join the comment",
+      any("continuation" in c for _, c, _ in _sp))
+_d5 = _fr.parse_responses("T-STRUCT2", _PROSE, _SXML)
+check("structural is preferred when usable or falls back cleanly",
+      _d5["convention"] in ("structural", "plain"), str(_d5["convention"]))
+
 print("\n=== cold start: every page on a fresh install with no data ===")
 import shutil, tempfile, subprocess
 cold = tempfile.mkdtemp(prefix="dl_cold_")

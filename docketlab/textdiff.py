@@ -159,8 +159,12 @@ def run(docket_id: str, progress=None) -> dict:
     say = progress or (lambda m: None)
 
     docs = fedreg.find_documents(docket_id)
-    nprm = next((d for d in docs if d["type"] == "Proposed Rule"), None)
-    final = next((d for d in reversed(docs) if d["type"] == "Rule"), None)
+    # Same selection as the preamble parser, for the same reason: a correction
+    # is typed "Rule" and diffing against it compares the wrong two documents.
+    nprm, nprm_why = fedreg._pick(docs, "Proposed Rule")
+    final, final_why = fedreg._pick(docs, "Rule")
+    for line in nprm_why + final_why:
+        say(f"  {line}")
     if not (nprm and final):
         return {"error": "need both a proposed and a final rule to diff"}
 
@@ -186,9 +190,12 @@ def run(docket_id: str, progress=None) -> dict:
 
     rows = []
     for num in sorted(set(a) | set(b), key=_sort_key):
+        # Every row carries its docket. The table previously held whichever
+        # docket was diffed most recently, and every reader reported it for
+        # whatever docket was being viewed.
         pw = len((a[num]["body"] if num in a else "").split())
         fw = len((b[num]["body"] if num in b else "").split())
-        base = {"section": num, "sort_key": _sort_key(num),
+        base = {"docket_id": docket_id, "section": num, "sort_key": _sort_key(num),
                 "words_proposed": pw, "words_final": fw}
         if num in a and num in b:
             kind, ratio = _summarize(a[num]["body"], b[num]["body"])
@@ -206,7 +213,7 @@ def run(docket_id: str, progress=None) -> dict:
                          "final_text": None})
 
     with store.db() as con:
-        con.execute("DELETE FROM textdiff")
+        con.execute("DELETE FROM textdiff WHERE docket_id = ?", [docket_id])
     store.upsert("textdiff", rows)
 
     counts: dict[str, int] = {}
@@ -262,7 +269,8 @@ def outcome_map(docket_id: str) -> dict[str, dict]:
     from . import provisions
 
     diffs = store.query(
-        "SELECT section, change_kind, magnitude, words_proposed, words_final FROM textdiff"
+        "SELECT section, change_kind, magnitude, words_proposed, words_final "
+        "FROM textdiff WHERE docket_id = ?", [docket_id]
     )
     if diffs.empty:
         return {}
@@ -309,9 +317,14 @@ def outcome_map(docket_id: str) -> dict[str, dict]:
     return out
 
 
-def summary() -> dict:
+def summary(docket_id: str | None = None) -> dict:
     """Base-rate facts the UI needs in order to caveat the silent-grant column."""
-    df = store.query("SELECT change_kind, magnitude FROM textdiff")
+    if docket_id:
+        df = store.query(
+            "SELECT change_kind, magnitude FROM textdiff WHERE docket_id = ?",
+            [docket_id])
+    else:
+        df = store.query("SELECT change_kind, magnitude FROM textdiff")
     if df.empty:
         return {"available": False}
     moved = df[df.change_kind.isin(CHANGED)]
