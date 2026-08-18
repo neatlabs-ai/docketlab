@@ -305,6 +305,42 @@ check("a comment-period extension is not treated as a proposal",
       _n["document_number"] != "2021-27312")
 check("the selection explains itself", any("chose" in x for x in _fw), str(_fw[:2]))
 
+# The checks above hand _pick documents that carry an "action". find_documents
+# does not request that field, so in the live pipeline every action test above
+# is vacuous and selection falls through to the ordering rules. Both are checked
+# here: that the field is actually requested, and that the ordering is right
+# even when it is absent.
+_asked = {}
+def _capture(path, params=None):
+    _asked.update(params or {})
+    return {"results": []}
+_real_get, _fr._get = _fr._get, _capture
+try:
+    _fr.find_documents("X-0001")
+finally:
+    _fr._get = _real_get
+_fields = set(_asked.get("fields[]") or [])
+check("find_documents requests the action field", "action" in _fields, str(sorted(_fields)))
+check("find_documents requests the XML url, without which structural parsing "
+      "never runs", "full_text_xml_url" in _fields)
+
+# A docket carries ancillary documents typed "Proposed Rule" that no action
+# keyword predicts - a notice of posting a video, of data availability, of a
+# hearing. Ranking proposals by date first gave the NPRM slot to whichever came
+# last. This is the real CMMC docket with the action text stripped, as
+# find_documents currently returns it.
+_NOACTION = [
+ {"document_number":"2023-27280","type":"Proposed Rule","publication_date":"2023-12-26",
+  "start_page":1,"end_page":81},
+ {"document_number":"2024-03460","type":"Proposed Rule","publication_date":"2024-02-21",
+  "start_page":1,"end_page":1},
+ {"document_number":"2024-22905","type":"Rule","publication_date":"2024-10-15",
+  "start_page":1,"end_page":146},
+]
+_n2, _ = _fr._pick(_NOACTION, "Proposed Rule")
+check("a later one-page notice does not displace the NPRM",
+      _n2["document_number"] == "2023-27280", f"chose {_n2['document_number']}")
+
 # #2 - prose ending "...we received comments." opened a pair.
 _PROSE = ("The agency reviewed the record. In response to the notice we received comments. "
           "Commenters raised concerns about methodology and the underlying data at length.\n\n"

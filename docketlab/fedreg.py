@@ -109,7 +109,7 @@ def find_documents(docket_id: str) -> list[dict]:
             "fields[]": [
                 "document_number", "title", "type", "publication_date",
                 "start_page", "end_page", "raw_text_url", "comments_close_on",
-                "effective_on", "html_url",
+                "effective_on", "html_url", "action", "full_text_xml_url",
             ],
         },
     )
@@ -157,10 +157,14 @@ def _pick(docs: list[dict], want: str) -> tuple[dict | None, list[str]]:
         pool = plain or eligible
         chosen = max(pool, key=lambda d: (_pages(d), d.get("publication_date") or ""))
     else:
-        # A supplemental proposal supersedes the original it amends.
+        # A supplemental proposal supersedes the original it amends. Absent one,
+        # length decides: a docket carries ancillary documents typed "Proposed
+        # Rule" that no action keyword predicts - a notice of posting an
+        # informational video, of data availability, of a public hearing. Ranking
+        # by date first handed the NPRM slot to whichever of those came last.
         supp = [d for d in eligible if _SUPPLEMENTAL.search(d.get("action") or "")]
         pool = supp or eligible
-        chosen = max(pool, key=lambda d: (d.get("publication_date") or "", _pages(d)))
+        chosen = max(pool, key=lambda d: (_pages(d), d.get("publication_date") or ""))
 
     notes.append(
         f"chose {chosen['document_number']} ({_pages(chosen)}pp, "
